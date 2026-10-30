@@ -54,20 +54,21 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 898 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 905 tests, all hand-computed expected values
 ```
 
 One test module needs numpy, because one node does. It is imported lazily inside
 that node, so the pack still imports without numpy and only `CinemaGradeApply`
 fails at execution time. The test module matches that tolerance with
 `pytest.importorskip`, so on a stdlib-only interpreter you get
-**811 passed, 8 skipped** rather than a collection error that hides the other 800.
+**811 passed, 15 skipped** rather than a collection error that hides the other 800.
 
-**Name the interpreter when you quote a total.** 898 and 811 are the same tree: the
-80-test difference is exactly `tests/test_nodes_grade_apply.py`, which is numpy-gated.
+**Name the interpreter when you quote a total.** 905, 891 and 811 are the same tree:
+the 80-test difference between 811 and 891 is exactly `tests/test_nodes_grade_apply.py`,
+which is numpy-gated, and the remaining 14 are the ComfyUI- and server-gated modules.
 The skip is loud and carries its reason, not a silent zero.
 
-**Seven of those tests drive ComfyUI's real execution engine.** They are gated on
+**Eight of those tests drive ComfyUI's real execution engine.** They are gated on
 `COMFYUI_PATH` and skip with a specific reason when it is unset, when the path is not a
 ComfyUI checkout, or when `torch` is missing — so a green run is never mistaken for
 "the pack was executed". To run them:
@@ -80,6 +81,34 @@ They boot ComfyUI's own loader, build a graph with `GraphBuilder`, run it throug
 `execution.PromptExecutor`, and read the values back out of the executor cache. That is
 the only test here that would catch a node whose declared inputs and callable signature
 disagree, or a JUDGE→POST edge that is wired but carries nothing.
+
+**Six more drive a live ComfyUI server over HTTP** — the way a user actually runs the
+pack. They are gated on `COMFYUI_URL`:
+
+```bash
+# in one shell
+cd /path/to/ComfyUI && python main.py --cpu --port 8188
+# in another
+COMFYUI_URL=http://127.0.0.1:8188 python -m pytest tests/test_live_server.py -q
+```
+
+They import nothing from ComfyUI. They `GET /object_info` to see what registered,
+`POST /prompt` to submit, and `GET /history/<id>` to read the result. Measured against
+ComfyUI 0.43.0: **18/18 nodes registered under category `Cinematographer`**, the
+JUDGE→POST gate returns `status_str: success` with the Judge's correction text arriving
+in the Grade node's JSON **verbatim**, the Director→Shoot path composes a real prompt
+with `#dolly-in` resolved and zero unresolved tags, and a malformed input fails with an
+error that names the pack rather than passing silently.
+
+> **One thing a user must know, found by running this.** A live server rejects a prompt
+> that contains only our judgement nodes:
+> `{"error": {"type": "prompt_no_outputs", "message": "Prompt has no outputs"}}`.
+> `CinemaElementSave` is the pack's only `OUTPUT_NODE`, and it is one for its *side
+> effect* — it writes an Element into the registry — not for display. Every other node
+> is pruned unless something consumes it. **Terminate a Cinematographer graph in a stock
+> output node** (`PreviewAny`, `SaveImage`, …). This is correct ComfyUI behaviour and
+> true of most packs; it is stated here because it is the first thing that will bite
+> someone who wires up our nodes and hits Queue Prompt.
 
 The engine imports with **zero ComfyUI dependency** — that is a deliberate design constraint, so
 the geometry is testable and reusable outside ComfyUI.
@@ -189,6 +218,12 @@ it stops at `KSampler` because a stub has no `get_model_object` — a missing-we
 wiring defect. That is the honest boundary of this repository: the code runs, the weights are absent.
 
 The other five graphs have **never been executed** and no claim here should be read as one.
+
+Separately from the shipped graphs, the pack itself has been driven through a **live ComfyUI
+server** over HTTP — `POST /prompt`, `GET /history` — with a graph of our own nodes. That run
+needs no weights and completes: the Judge measures a frame, the Correction node turns the
+failures into levers, and the Grade node receives that text verbatim. See
+`tests/test_live_server.py` and the section above.
 
 ```bash
 python workflows/validate_graphs.py
