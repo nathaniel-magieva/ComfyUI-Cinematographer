@@ -767,3 +767,51 @@ select.flagged { border-color: var(--fail); }
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ------------------------------------------------------- the Studio tab */
+/* The Studio tab is the front door, so its two tables carry the whole
+   argument: what our engine was told, and what it measured. Both are
+   computed at render time; neither is decoration. */
+.map-table,
+.rule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.map-table th,
+.rule-table th {
+  text-align: left;
+  color: var(--dim);
+  font-weight: 600;
+  padding: 4px 8px 6px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.map-table td,
+.rule-table td {
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.map-table td:nth-child(2) { color: var(--dim); }
+.rule-table td:nth-child(3),
+.rule-table td:nth-child(5) { white-space: nowrap; }
+.rule-fail td { background: var(--fail-bg); }
+.rule-table .dim { font-size: 11px; }
+
+.gate-badge-pass {
+  border-color: var(--pass);
+  background: var(--pass-bg);
+  color: var(--pass);
+}
+.gate-badge-fail {
+  border-color: var(--fail);
+  background: var(--fail-bg);
+  color: var(--fail);
+}
+
+/* The composed prompt is the one thing on this tab that needs no server. */
+#st-prompt {
+  max-height: 40vh;
+  overflow: auto;
+}

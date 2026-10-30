@@ -18,6 +18,7 @@ import * as EP from './elements_panel.js';
 import * as SP from './shoot_panel.js';
 import * as PP from './post_panel.js';
 import * as RP from './run_panel.js';
+import * as ST from './studio_panel.js';
 import * as CC from './comfy_client.js';
 
 // ---------------------------------------------------------------------------
@@ -707,7 +708,9 @@ function runAutoFrame() {
 // The three later tabs are additive: `showTab` still coerces an unknown name to
 // 'director', and the Director and Judge panels are untouched.
 
-const TABS = ['director', 'judge', 'elements', 'shoot', 'post', 'run'];
+// Studio is first because it is the front door: one screen, a scene, four
+// dropdowns and the measured verdict. The other six keep their relative order.
+const TABS = ['studio', 'director', 'judge', 'elements', 'shoot', 'post', 'run'];
 
 const TAB_NOTES = {
   director: 'The Director tab composes a plan. It does not generate anything.',
@@ -720,10 +723,12 @@ const TAB_NOTES = {
     'The Post tab describes a grade. CinemaGradeApply is what changes pixels, and it needs an image this panel does not have.',
   run:
     'The Run tab sends the prompt to a live ComfyUI and shows what the engine returned. It still generates no image and no video.',
+  studio:
+    'The Studio tab is one screen: a scene, four dropdowns, and the measured framing verdict. It sends nothing until you press Generate.',
 };
 
 function showTab(name) {
-  if (!TABS.includes(name)) name = 'director';
+  if (!TABS.includes(name)) name = 'studio';
   for (const t of TABS) {
     const panel = document.getElementById(`tab-${t}`);
     if (panel) panel.classList.toggle('hidden', t !== name);
@@ -734,7 +739,7 @@ function showTab(name) {
     btn.setAttribute('aria-selected', on ? 'true' : 'false');
   }
   const note = document.getElementById('tabnav-note');
-  if (note) note.textContent = TAB_NOTES[name] ?? TAB_NOTES.director;
+  if (note) note.textContent = TAB_NOTES[name] ?? TAB_NOTES.studio;
 
   // The viewport canvas has no size while its panel is hidden; re-measure on show.
   if (name === 'judge' && view) {
@@ -748,6 +753,7 @@ function showTab(name) {
   if (name === 'shoot') SP.renderShoot();
   if (name === 'post') PP.renderPost();
   if (name === 'run') RP.renderRun();
+  if (name === 'studio') ST.renderStudio();
 }
 
 function wireTabs() {
@@ -758,7 +764,9 @@ function wireTabs() {
       if (btn) showTab(btn.dataset.tab);
     });
   }
-  showTab('director');
+  // The landing tab is the front door. `index.html` marks the same one with
+  // `class="tab on"`; this call is what actually reveals the panel.
+  showTab('studio');
 }
 
 // ---------------------------------------------------------------------------
@@ -788,6 +796,7 @@ async function boot() {
     SP.initShootPanel();
     PP.initPostPanel({ getReport: () => P.compute(state).report });
     RP.initRunPanel({ getState: () => state });
+    ST.initStudioPanel({ getState: () => state });
   } catch (err) {
     window.__panelErrors.push(`boot: ${err.message}`);
     throw err;
@@ -811,6 +820,7 @@ async function boot() {
     shootPanel: SP,
     postPanel: PP,
     runPanel: RP,
+    studioPanel: ST,
     comfyClient: CC,
     showTab,
   };

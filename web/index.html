@@ -33,7 +33,10 @@
 </header>
 
 <nav class="tabnav" id="tabnav" role="tablist" aria-label="Panel mode">
-  <button class="tab on" data-tab="director" role="tab" aria-selected="true" type="button">
+  <button class="tab on" data-tab="studio" role="tab" aria-selected="true" type="button">
+    Studio <span class="tab-sub">one screen, start to verdict</span>
+  </button>
+  <button class="tab" data-tab="director" role="tab" aria-selected="false" type="button">
     Director <span class="tab-sub">sets the parameters</span>
   </button>
   <button class="tab" data-tab="judge" role="tab" aria-selected="false" type="button">
@@ -52,14 +55,14 @@
     Run <span class="tab-sub">drives ComfyUI</span>
   </button>
   <span class="tabnav-note" id="tabnav-note">
-    The Director tab composes a plan. It does not generate anything.
+    The Studio tab is one screen: a scene, four dropdowns, and the measured framing verdict. It sends nothing until you press Generate.
   </span>
 </nav>
 
 <main>
 
-<!-- ===================== TAB 1: DIRECTOR (default) ====================== -->
-<div id="tab-director" class="tabpanel">
+<!-- ===================== TAB 2: DIRECTOR ====================== -->
+<div id="tab-director" class="tabpanel hidden">
 
   <section class="card prompt-card">
     <div class="card-head">
@@ -260,7 +263,7 @@
   </div>
 </div>
 
-<!-- ====================== TAB 2: JUDGE (unchanged) ====================== -->
+<!-- ====================== TAB 3: JUDGE (unchanged) ====================== -->
 <div id="tab-judge" class="tabpanel layout hidden">
 
   <!-- ================= LEFT: viewport, frame preview, controls ============ -->
@@ -449,7 +452,7 @@
     </details>
   </section>
 </div>
-<!-- ============ TAB 3: ELEMENTS (Stage 1 BUILD + Stage 2 ATTACH) ========= -->
+<!-- ============ TAB 4: ELEMENTS (Stage 1 BUILD + Stage 2 ATTACH) ========= -->
 <div id="tab-elements" class="tabpanel layout hidden">
 
   <section class="col-left">
@@ -610,7 +613,7 @@
   </section>
 </div>
 
-<!-- ================= TAB 4: SHOOT (Stage 4 PROMPT) ====================== -->
+<!-- ================= TAB 5: SHOOT (Stage 4 PROMPT) ====================== -->
 <div id="tab-shoot" class="tabpanel layout hidden">
 
   <section class="col-left">
@@ -701,7 +704,7 @@
   </section>
 </div>
 
-<!-- ================== TAB 5: POST (Stage 5 POST) ======================== -->
+<!-- ================== TAB 6: POST (Stage 5 POST) ======================== -->
 <div id="tab-post" class="tabpanel layout hidden">
 
   <section class="col-left">
@@ -864,7 +867,7 @@
   </section>
 </div>
 
-<!-- ===================== TAB 6: RUN (drives ComfyUI) ===================== -->
+<!-- ===================== TAB 7: RUN (drives ComfyUI) ===================== -->
 <div id="tab-run" class="tabpanel layout hidden">
 
   <section class="col-left">
@@ -960,6 +963,140 @@
         The graph ends in <code>PreviewAny</code> taps, which is what makes it runnable
         at all — the pack's only <code>OUTPUT_NODE</code> is
         <code>CinemaElementSave</code>, which writes to disk.
+      </p>
+    </div>
+
+  </section>
+</div>
+
+<!-- ========== TAB 1: STUDIO (default) — one screen, from a sentence to a verdict ========== -->
+<div id="tab-studio" class="tabpanel layout">
+
+  <section class="col-left">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Scene</h2>
+        <span class="hint">their shape, our engine</span>
+      </div>
+      <p class="card-foot">
+        One box and four dropdowns, the way Comfy Org's reference app does it — the words in
+        the dropdowns are theirs, verbatim. The difference is what comes back: further down
+        this tab is the <strong>measured</strong> framing result, not a string.
+      </p>
+      <div class="control control-wide">
+        <label for="st-scene">Scene</label>
+        <textarea id="st-scene" rows="4" spellcheck="false"></textarea>
+      </div>
+      <div class="control-grid">
+        <div class="control">
+          <label for="st-shot">Shot</label>
+          <select id="st-shot"></select>
+        </div>
+        <div class="control">
+          <label for="st-camera">Camera</label>
+          <select id="st-camera"></select>
+        </div>
+        <div class="control">
+          <label for="st-light">Light</label>
+          <select id="st-light"></select>
+        </div>
+        <div class="control">
+          <label for="st-look">Look</label>
+          <select id="st-look"></select>
+        </div>
+      </div>
+      <div class="generate-row">
+        <button id="st-generate" class="btn" type="button">Generate →</button>
+        <button id="st-autoframe" class="btn btn-ghost" type="button">Auto-frame the camera</button>
+      </div>
+      <p class="card-foot" id="st-gate" role="status"></p>
+      <p class="card-foot" id="st-status" role="status"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>The verdict</h2>
+        <span class="hint">nine rules, measured here</span>
+      </div>
+      <div id="st-verdict-head"></div>
+      <div id="st-verdict"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>The correction lever</h2>
+        <span class="hint">CinematographerCorrection, verbatim</span>
+      </div>
+      <div id="st-lever"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What the engine returned</h2>
+        <span class="hint">live, from ComfyUI</span>
+      </div>
+      <p class="card-foot" id="st-ran"></p>
+      <div id="st-taps" class="tap-list"></div>
+      <div id="st-errors"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>This tab's verdict vs the engine's</h2>
+        <span class="hint">compared, not assumed</span>
+      </div>
+      <div id="st-reconcile"></div>
+    </div>
+
+  </section>
+
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>The prompt</h2>
+        <span class="hint">director.js · composePrompt</span>
+      </div>
+      <pre class="plan-pre plan-pre-tall" id="st-prompt"></pre>
+      <details>
+        <summary>See the prompt sent to the model</summary>
+        <div id="st-prompt-detail"></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Their words → our engine</h2>
+        <span class="hint">checked against the enums at load</span>
+      </div>
+      <div id="st-mapping"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What this does not do</h2>
+      </div>
+      <p class="card-foot">
+        It generates <strong>no image and no video</strong> — the pack ships no
+        <code>IMAGE</code> node, so <code>CinemaGradeApply</code> still has nothing to
+        consume. Generate runs the real graph and returns the engine's own text, which is
+        what the taps below are.
+      </p>
+      <p class="card-foot">
+        The camera's <em>position</em> is inherited from the Director tab; these four
+        dropdowns set the shot, the lens, the light and the look on top of it. This tab
+        derives its own state and <strong>writes to no other tab</strong>, so switching
+        here never silently changes what another tab was showing. The server address is
+        the Run tab's field.
+      </p>
+      <p class="card-foot dim">
+        The four lists are Comfy Org's vocabulary from their MIT-licensed
+        <code>lib/prompt.ts</code>. Their engine is one line —
+        <code>[shot, scene, camera, light, look].join('. ')</code> — and their own UI says
+        the camera choices "add words to the prompt; the image model does not physically
+        simulate a lens or camera". Ours does simulate one, so it can tell you whether the
+        frame it produced is any good.
       </p>
     </div>
 

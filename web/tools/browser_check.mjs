@@ -186,17 +186,39 @@ try {
   await waitFor('document.querySelectorAll("#d-move-add option").length > 0', 'director controls');
 
   // ===================== DIRECTOR TAB (the default) =====================
-  console.log('[D1] Director tab is the default');
+  console.log('[D1] the Studio tab is the default — it is the front door');
   const tabState = await evaluate(`(() => ({
+    studioHidden: document.getElementById('tab-studio').classList.contains('hidden'),
     directorHidden: document.getElementById('tab-director').classList.contains('hidden'),
     judgeHidden: document.getElementById('tab-judge').classList.contains('hidden'),
     onTab: document.querySelector('#tabnav .tab.on')?.dataset.tab,
     note: document.getElementById('tabnav-note').textContent.trim(),
+    order: [...document.querySelectorAll('#tabnav .tab')].map((b) => b.dataset.tab),
   }))()`);
-  ok(!tabState.directorHidden, 'the Director tab is visible on load');
+  ok(!tabState.studioHidden, 'the Studio tab is visible on load');
+  ok(tabState.directorHidden, 'the Director tab starts hidden');
   ok(tabState.judgeHidden, 'the Judge tab starts hidden');
-  ok(tabState.onTab === 'director', 'the Director tab button is selected', tabState.onTab);
-  ok(/does not generate/.test(tabState.note), 'the tab bar says the panel does not generate', tabState.note);
+  ok(tabState.onTab === 'studio', 'the Studio tab button is selected', tabState.onTab);
+  ok(
+    tabState.order[0] === 'studio'
+      && JSON.stringify(tabState.order.slice(1))
+        === JSON.stringify(['director', 'judge', 'elements', 'shoot', 'post', 'run']),
+    'Studio is first and the other six keep their relative order',
+    tabState.order.join(' → '),
+  );
+  ok(
+    /one screen.*measured framing verdict/.test(tabState.note),
+    'the tab bar explains the landing tab',
+    tabState.note,
+  );
+
+  // Everything below this line was written against the Director tab being the
+  // landing tab. Reveal it explicitly rather than relying on the default.
+  await evaluate(`window.__cinematographer.showTab('director')`);
+  await waitFor(
+    `!document.getElementById('tab-director').classList.contains('hidden')`,
+    'the Director tab to be shown',
+  );
 
   const panelErrors = await evaluate('JSON.stringify(window.__panelErrors || [])');
   ok(panelErrors === '[]', 'the page booted with no JS errors', panelErrors);
@@ -1348,6 +1370,275 @@ try {
       'the Director tab was restored after the check',
       JSON.stringify(restored),
     );
+  }
+
+  // ===================== STUDIO TAB (the front door) =====================
+  console.log('\n[S1] Studio tab — their shape, our engine');
+  const studioTab = await evaluate(`(() => {
+    const btn = document.querySelector('#tabnav .tab[data-tab="studio"]');
+    const panel = document.getElementById('tab-studio');
+    window.__cinematographer.showTab('studio');
+    const SP = window.__cinematographer.studioPanel;
+    const opts = (id) => [...document.getElementById(id).options].map((o) => o.value);
+    return {
+      hasButton: !!btn,
+      hasPanel: !!panel,
+      tabs: [...document.querySelectorAll('#tabnav .tab')].map((b) => b.dataset.tab),
+      shot: opts('st-shot'),
+      camera: opts('st-camera'),
+      light: opts('st-light'),
+      look: opts('st-look'),
+      mappingErrors: SP.MAPPING_ERRORS,
+      expected: {
+        shot: SP.SHOT_CHOICES, camera: SP.CAMERA_CHOICES,
+        light: SP.LIGHT_CHOICES, look: SP.LOOK_CHOICES,
+      },
+    };
+  })()`);
+  ok(studioTab.hasButton && studioTab.hasPanel, 'the Studio tab is in the bar and reachable',
+    studioTab.tabs.join(' → '));
+  ok(
+    studioTab.shot.length === 5 && studioTab.camera.length === 4
+      && studioTab.light.length === 4 && studioTab.look.length === 4,
+    "the four dropdowns carry Comfy Org's own vocabulary, at their own lengths",
+    `${studioTab.shot.length}/${studioTab.camera.length}/${studioTab.light.length}/${studioTab.look.length}`,
+  );
+  ok(
+    JSON.stringify(studioTab.shot) === JSON.stringify(studioTab.expected.shot)
+      && JSON.stringify(studioTab.camera) === JSON.stringify(studioTab.expected.camera)
+      && JSON.stringify(studioTab.light) === JSON.stringify(studioTab.expected.light)
+      && JSON.stringify(studioTab.look) === JSON.stringify(studioTab.expected.look),
+    'the rendered options are the module\'s own lists, in order',
+  );
+  ok(
+    studioTab.mappingErrors.length === 0,
+    'every one of their words maps to a real engine enum member',
+    studioTab.mappingErrors.length ? studioTab.mappingErrors.join(' | ') : '0 mapping errors',
+  );
+
+  console.log('\n[S2] Studio tab — the verdict is measured, and the preview is the real parser');
+  const studioVerdict = await evaluate(`(() => {
+    const SP = window.__cinematographer.studioPanel;
+    const D = window.__cinematographer.director;
+    const DP = window.__cinematographer.directorPanel;
+    const v = SP.studioVerdict();
+    const rows = [...document.querySelectorAll('#st-verdict tbody tr')];
+
+    // Change all four, the way a stranger would, and re-read.
+    const scene = 'A lone astronaut finds a field of flowers on Mars';
+    document.getElementById('st-scene').value = scene;
+    document.getElementById('st-shot').value = 'Low-angle shot';
+    document.getElementById('st-camera').value = '85mm portrait lens, soft background';
+    document.getElementById('st-light').value = 'Golden-hour backlight';
+    const look = document.getElementById('st-look');
+    look.value = 'High-contrast noir';
+    look.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const shown = document.getElementById('st-prompt').textContent;
+    const direct = D.composePrompt({
+      text: scene, moves: DP.directorState.moves, registry: DP.getRegistry(),
+    }).prompt;
+
+    // Measure the frame the four choices produce, then pull the lever.
+    const preSolve = SP.studioVerdict();
+    const before = JSON.stringify(window.__cinematographer.directorState);
+    document.getElementById('st-autoframe').click();
+    const solved = SP.isSolved();
+    const after = SP.studioVerdict();
+
+    return {
+      v, rowCount: rows.length,
+      badges: rows.map((r) => r.querySelector('.gate-badge')?.textContent.trim()),
+      head: document.getElementById('st-verdict-head').textContent.trim(),
+      shown, direct, scene,
+      t: SP.studioTranslation(),
+      solved,
+      directorUnchanged: before === JSON.stringify(window.__cinematographer.directorState),
+      afterWeighted: after.weighted_failures,
+      beforeWeighted: preSolve.weighted_failures,
+      status: document.getElementById('st-status').textContent.trim(),
+    };
+  })()`);
+  ok(studioVerdict.rowCount === 9, 'the verdict table has all 9 rules', String(studioVerdict.rowCount));
+  ok(
+    studioVerdict.badges.length === 9
+      && studioVerdict.badges.every((b) => b === 'pass' || b === 'fail'),
+    'every rule carries a pass/fail badge',
+    studioVerdict.badges.join(','),
+  );
+  ok(
+    studioVerdict.v.rules.length === 9
+      && studioVerdict.v.rules.every((r) => typeof r.value === 'number'),
+    'every rule has a computed numeric measurement, not a label',
+  );
+  ok(
+    /^(PASS|FAIL) (closeup|medium|wide) on '/.test(studioVerdict.v.summary),
+    "the verdict is the engine's own summary format",
+    studioVerdict.v.summary,
+  );
+  ok(
+    /reliability (green|yellow|red)/.test(studioVerdict.head),
+    'the reliability zone is on screen beside it',
+    (studioVerdict.head.match(/reliability \w+/) ?? [''])[0],
+  );
+  ok(
+    studioVerdict.shown === studioVerdict.direct && studioVerdict.shown.includes(studioVerdict.scene),
+    'the preview is byte-identical to director.js composePrompt() — one parser, not two',
+    studioVerdict.shown.slice(0, 70),
+  );
+  ok(
+    studioVerdict.t.shot_type === 'medium' && studioVerdict.t.angle === 'low'
+      && studioVerdict.t.focal_mm === 85 && studioVerdict.t.light === 'contre-jour'
+      && studioVerdict.t.color_palette === 'neon-rain-at-midnight',
+    'all four choices reach the engine as real values',
+    JSON.stringify(studioVerdict.t),
+  );
+  ok(studioVerdict.solved, 'Auto-frame solves a camera and adopts it');
+  ok(
+    studioVerdict.afterWeighted.length <= studioVerdict.beforeWeighted.length,
+    'the solve does not make the weighted verdict worse',
+    `${studioVerdict.beforeWeighted.join(',') || 'none'} → ${studioVerdict.afterWeighted.join(',') || 'none'}`,
+  );
+  ok(
+    studioVerdict.directorUnchanged,
+    "the solve is local to this tab — the Director tab's state is untouched",
+  );
+  ok(
+    /converged|did NOT converge/.test(studioVerdict.status),
+    'the convergence flag is on screen, not implied',
+    studioVerdict.status,
+  );
+
+  console.log('\n[S3] Studio tab — the @-tag divergence is reported, not hidden');
+  const greedyTag = await evaluate(`(() => {
+    const D = window.__cinematographer.director;
+    const DP = window.__cinematographer.directorPanel;
+    const SP = window.__cinematographer.studioPanel;
+    const scene = document.getElementById('st-scene');
+    const compose = (text) => D.composePrompt({
+      text, moves: DP.directorState.moves, registry: DP.getRegistry(),
+    });
+    const clean = compose(SP.SCENE_DEFAULT);
+    scene.value = 'A lone astronaut finds a field of flowers on Mars, @tamsincamp in the doorway';
+    scene.dispatchEvent(new Event('input', { bubbles: true }));
+    const greedy = compose(scene.value);
+    const detail = document.getElementById('st-prompt-detail').textContent;
+    scene.value = SP.SCENE_DEFAULT;
+    scene.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      defaultScene: SP.SCENE_DEFAULT,
+      cleanUnresolved: clean.unresolved,
+      cleanAttachments: clean.attachments.length,
+      panelGreedyUnresolved: greedy.unresolved,
+      panelGreedyPrompt: greedy.prompt,
+      detail,
+    };
+  })()`);
+  ok(
+    !/@/.test(greedyTag.defaultScene),
+    'the default scene carries no @tag, so it cannot fail to resolve on any server',
+    greedyTag.defaultScene,
+  );
+  ok(
+    greedyTag.cleanUnresolved === 0 && greedyTag.cleanAttachments === 0,
+    "the tab's default scene composes clean — a stranger's first Generate is clean",
+    `${greedyTag.cleanAttachments} attachment(s), ${greedyTag.cleanUnresolved} unresolved`,
+  );
+  ok(
+    greedyTag.panelGreedyUnresolved === 0 && /<<<image_1>>>/.test(greedyTag.panelGreedyPrompt),
+    'the panel reads @tamsincamp non-greedily and resolves it',
+    `unresolved=${greedyTag.panelGreedyUnresolved}`,
+  );
+  ok(
+    /engine does not/.test(greedyTag.detail) && /registry/.test(greedyTag.detail),
+    'the tab says on screen that the engine resolves against a server registry file, not this list',
+  );
+
+  console.log('\n[S4] Studio tab — Generate runs the real graph');
+  if (!serverUp) {
+    ok(true, `live studio run skipped — ${serverWhy}`,
+      'the verdict, the preview and the mapping above are all local and all passed');
+  } else {
+    // The server publishes its own default registry path; ask it rather than
+    // hardcoding one, because `registry_path: ""` is a silent no-op.
+    const registryDefault =
+      objectInfo?.CinemaElementSave?.input?.optional?.registry_path?.[1]?.default ?? '';
+    await evaluate(`(() => {
+      const f = document.getElementById('r-base-url');
+      f.value = ${JSON.stringify(COMFY)};
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+      const path = document.getElementById('r-registry-path');
+      if (!path.value.trim()) path.value = ${JSON.stringify(registryDefault ?? '')};
+      // The tab's own default, untouched: this is what a stranger's first
+      // Generate actually sends.
+      const SP = window.__cinematographer.studioPanel;
+      document.getElementById('st-scene').value = SP.SCENE_DEFAULT;
+      document.getElementById('st-scene').dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('st-generate').click();
+      return true;
+    })()`);
+    await waitFor(
+      `(() => {
+        const s = document.getElementById('st-status').textContent;
+        return /taps returned output in this record|it failed|Nothing was sent|does not know|threw|No ComfyUI/.test(s);
+      })()`,
+      'the studio run to settle',
+      180000,
+    );
+
+    const studioRun = await evaluate(`(() => {
+      const SP = window.__cinematographer.studioPanel;
+      const CC = window.__cinematographer.comfyClient;
+      const res = SP.lastStudioRun();
+      const out = {
+        ok: res?.ok ?? false,
+        stage: res?.stage ?? null,
+        promptId: res?.submit?.prompt_id ?? null,
+        nodeErrors: Object.keys(SP.studioNodeErrors()),
+        ran: document.getElementById('st-ran').textContent.trim(),
+        reconcile: document.getElementById('st-reconcile').textContent.trim(),
+        status: document.getElementById('st-status').textContent.trim(),
+        taps: [],
+        record: null,
+      };
+      if (res?.ok) {
+        out.taps = CC.readTaps(res.record, res.built.taps).map((t) => ({
+          key: t.key, ran: t.ran, text: (t.text ?? '').slice(0, 200),
+        }));
+        out.record = {
+          status_str: res.record?.status?.status_str,
+          completed: res.record?.status?.completed,
+          outputNodes: Object.keys(res.record?.outputs ?? {}),
+        };
+      }
+      return out;
+    })()`);
+
+    ok(studioRun.ok, 'the Studio tab really executed the graph', `stage ${studioRun.stage}`);
+    ok(studioRun.promptId !== null, 'ComfyUI assigned a prompt_id', studioRun.promptId);
+    ok(studioRun.nodeErrors.length === 0, 'node_errors is empty — no node was silently dropped',
+      studioRun.nodeErrors.length ? studioRun.nodeErrors.join(',') : '{}');
+    ok(studioRun.record?.status_str === 'success' && studioRun.record?.completed === true,
+      'the run reports success and completion',
+      `status_str "${studioRun.record?.status_str}", completed ${studioRun.record?.completed}`);
+    ok(/^7 \/ 7 taps returned output in this record/.test(studioRun.ran),
+      'all seven taps returned output — the graph ran whole', studioRun.ran);
+    const studioByKey = Object.fromEntries(studioRun.taps.map((t) => [t.key, t.text]));
+    ok(!!studioByKey.evaluate && !!studioByKey.corrections && !!studioByKey.final_prompt,
+      "the engine returned its own verdict, corrections and prompt",
+      studioByKey.evaluate);
+    ok(/of \d+ comparable strings are identical/.test(studioRun.reconcile),
+      'the panel and the engine were compared, not assumed equal',
+      (studioRun.reconcile.match(/\d+ of \d+ comparable strings are identical/) ?? [''])[0]);
+    ok(!/partial run/.test(studioRun.status),
+      'a clean run is not described as partial', studioRun.status.slice(0, 90));
+    ok((studioByKey.unresolved ?? '').trim() === '[]',
+      "the tab's default scene came back with nothing unresolved — the first run is clean",
+      studioByKey.unresolved);
+    ok(/@tags: the panel and the engine agree/.test(studioRun.reconcile),
+      'the reconcile card reports the tag comparison, not just the three strings',
+      (studioRun.reconcile.match(/@tags:[^.]*\./) ?? [''])[0]);
+    await evaluate(`window.__cinematographer.showTab('studio')`);
   }
 
   console.log('\n[6] screenshot');

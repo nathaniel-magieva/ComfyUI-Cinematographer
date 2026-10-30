@@ -1,14 +1,26 @@
 # Director's Panel
 
-A single-page panel with two tabs, because the entry has two halves:
+A single-page panel with seven tabs. It opens on **Studio**:
 
-- **Director** *(default)* — the **pre**-generation control surface. Five control groups, a prompt box
-  with live `@Element` / `#move` resolution, a generation bar with a real credit cost, and a pane
-  showing **exactly what would be sent**. It composes a plan. It does not generate anything.
+- **Studio** *(default)* — the front door. One scene box, four dropdowns, one button: the shape of
+  Comfy Org's MIT-licensed reference app. The difference is what comes back — the nine per-shot
+  cinematography rules, each measured, each pass or fail, with the correction lever for every one
+  that failed. Their app can only ever show you a string.
+- **Director** — the **pre**-generation control surface. Five control groups, a prompt box with live
+  `@Element` / `#move` resolution, a generation bar with a real credit cost, and a pane showing
+  **exactly what would be sent**. It composes a plan. It does not generate anything.
 - **Judge** — the **post**-generation measurement surface. Move the camera and watch all nine
-  per-shot cinematography rules recompute live: measured value, pass/fail, and the correction lever
-  for every one. Press **Auto-Frame** and the solver moves the camera for you, reporting honestly
-  whether it converged.
+  per-shot rules recompute live: measured value, pass/fail, and the correction lever for every one.
+  Press **Auto-Frame** and the solver moves the camera for you, reporting honestly whether it
+  converged.
+- **Elements** — the cast and the sets. It validates what the node would write and shows the sidecar
+  and the registry document. It writes no file.
+- **Shoot** — composes the prompt from the Director tab's parameters and resolves `@Element` tags to
+  the API's `<<<image_N>>>` tokens.
+- **Post** — describes a grade. `CinemaGradeApply` is what changes pixels, and it needs an image this
+  panel does not have.
+- **Run** — builds a ComfyUI API prompt, POSTs it to a live server, polls `/history`, and renders what
+  the engine returned. It still generates no image and no video.
 
 No build step. No framework. No backend.
 
@@ -243,6 +255,7 @@ looks solved.
 |---|---|
 | **Video generation** | **Still not wired.** No tab generates an image or a video. There is no LTX, no CrossView-Warp, no MoGe-2, no depth pass, no render, and `CinemaGradeApply` still has no `IMAGE` to consume. The Generate button is **disabled** and says so. |
 | **The Run tab** | **Really wired, and the only thing that is.** It builds a ComfyUI API prompt from the current state, POSTs it to a configurable base URL (default `http://127.0.0.1:8188`), polls `/history/<prompt_id>`, and renders the values the engine returned. It still produces no image and no video: the graph terminates in stock `PreviewAny` taps, which render text. With no server it says so on screen and sends nothing. |
+| **The Studio tab** | **The front door, and it really runs.** One scene box, four dropdowns, one button — the shape of Comfy Org's MIT-licensed reference app, with our engine behind it. It reuses `director.js`'s `composePrompt` for the preview and `run_panel.js`'s `executeLive` for the POST, so there is one parser and one POST path in this panel, not two. It generates no image and no video either. |
 | **The Director tab's plan** | It is a plan, not a request. Nothing is sent *from that tab*; the Run tab is the one that sends. |
 | **The Element registry** | Three demo Elements (`@tamsincamp`, `@the-diner`, `@chrome-revolver`) so the `@` mechanism is visible with nothing wired up. Not loaded from a project. |
 | **The emotion wheel** | 9 names, being the union of the on-screen wheel and the settings reference (they differ by `Interest` vs `Hope`). The wheel is visibly larger than its visible arc, so this is a floor. One tutorial claims 80 emotions across three strength levels; that is unverified and not implemented. The panel spells them as slugs (`sadness`); `CinemaDirectorPanel`'s COMBO is Title Case (`Sadness`) and ComfyUI validates a COMBO by exact membership, so `comfy_client.ENGINE_EMOTIONS` translates on the way out and the parity check asserts it equals `director.EMOTIONS` exactly. |
@@ -270,6 +283,24 @@ looks solved.
   `PreviewAny` taps — while still answering **HTTP 200 with a `prompt_id`** and reporting
   `status_str: "success"`. The dropped nodes are named only in the response's `node_errors`, so the
   Run tab now refuses to call such a run clean and the browser check asserts `node_errors` is empty.
+- **An `@` tag is greedy in the engine and non-greedy in the panel, and the Studio tab says so.**
+  `cinematographer/prompt.py`'s `parse_element_tags` reads a name up to the next `@`, `#` or
+  punctuation, so the engine reads `@tamsincamp in the doorway` as the Element *"tamsincamp in the
+  doorway"* — which does not exist, so the tag stays literal and comes back unresolved. It documents
+  this as the contract and inherits it rather than second-guessing it. `director.js`'s `parsePrompt`
+  stops at whitespace, so the panel reads the same text as `@tamsincamp` and resolves it. **The two
+  disagree, and the Studio tab reports the disagreement instead of picking a side silently** — the
+  reconcile card compares the panel's unresolved count with the engine's `unresolved` tap and prints
+  both. **Delimit your tags** — `@tamsincamp, in the doorway`.
+- **A tag needs a registry *file* on the server, and a fresh server has none.** The panel resolves
+  against its own 3-entry demo registry; `CinemaPromptCompose` resolves against the `registry_path`
+  you send it, which defaults to `/private/tmp/ComfyUI/output/cinematographer/elements.json`.
+  Measured 2026-10-30 on a clean server: that file did not exist, so the engine returned
+  `unresolved: ["tamsincamp"]` for `@tamsincamp,` while the panel's preview resolved it to
+  `<<<image_1>>>`. The Elements tab is what writes the file. This is why the Studio tab's default
+  scene carries no `@tag`: a first Generate has to be clean on any server, and a tag cannot promise
+  that. The Studio tab's prompt card states which registry the engine will read, and the reconcile
+  card reports the mismatch when it happens.
 
 ### three.js
 
@@ -286,9 +317,11 @@ Three checks, all re-runnable. Nothing below is claimed without having been run.
 
 | Check | Command | Result |
 |---|---|---|
-| Parity, four ways | `python3 app/web/parity_check.py` | `RESULT: PASS — 49 fixtures, 0 mismatches` (exit 0), 4 findings |
-| Headless panel logic | `node app/web/tools/smoke_test.mjs` | `PASS — 63/63 checks passed` (exit 0) |
-| Real browser pass | see below | `PASS — 50/50 browser checks passed` (exit 0) |
+| Parity, four ways | `python3 web/parity_check.py` | `RESULT: PASS — 105 fixtures, 0 mismatches` (exit 0), 2 findings |
+| Headless panel logic | `node web/tools/smoke_test.mjs` | `PASS — 63/63 checks passed` (exit 0) |
+| Real browser pass | `node web/tools/browser_check.mjs http://127.0.0.1:8765/` | `PASS — 181/181 browser checks passed` (exit 0) |
+| The Studio tab, end to end | `node web/tools/studio_check.mjs http://127.0.0.1:8765/` | `PASS — 49/49 checks` (exit 0) |
+| Python engine | `/tmp/cine-venv/bin/python -m pytest tests/ -q` | `816 passed, 22 skipped` |
 
 The smoke test drives the *real* panel pipeline (`panel_state.js` → `cinematographer.js`, and
 `director.js` directly), not a copy. It also asserts that every DOM id `app.js` **and**
@@ -321,7 +354,7 @@ It needs Chrome or Chromium; set `CHROME_PATH` if it is not in a standard locati
 
 | File | Role |
 |---|---|
-| [`index.html`](index.html) | The panel markup: tab bar, Director tab, Judge tab. |
+| [`index.html`](index.html) | The panel markup: the tab bar and all seven tab panels. The Studio tab is the one marked `class="tab on"` — it is what the page opens on. |
 | [`styles.css`](styles.css) | Dark high-contrast theme; pass/fail/info colour coding. |
 | [`app.js`](app.js) | Tab switching, Judge-tab DOM wiring, 2D frame preview, three.js viewport. No arithmetic. |
 | [`director_panel.js`](director_panel.js) | Director-tab DOM wiring. Builds every control from `director.js`. |
@@ -334,14 +367,42 @@ It needs Chrome or Chromium; set `CHROME_PATH` if it is not in a standard locati
 | [`tools/gen_fixtures.py`](tools/gen_fixtures.py) | Regenerates the fixtures from the Python engine. |
 | [`tools/smoke_test.mjs`](tools/smoke_test.mjs) | Headless panel-logic checks. |
 | [`tools/browser_check.mjs`](tools/browser_check.mjs) | Headless-Chrome end-to-end check. |
+| [`comfy_client.js`](comfy_client.js) | **The ComfyUI client.** Builds the API prompt, probes the server, POSTs, polls `/history`, reads the taps. DOM-free, so Node and the page run the same code. |
+| [`run_panel.js`](run_panel.js) | Run-tab DOM wiring, plus `executeLive()` — the whole live pipeline with no DOM in it, which is what the Studio tab calls. |
+| [`studio_panel.js`](studio_panel.js) | **The Studio tab.** Comfy Org's four dropdowns, mapped to engine enums and checked at load; the nine-rule verdict; the correction lever. |
+| [`tools/studio_check.mjs`](tools/studio_check.mjs) | Drives the Studio tab end to end and prints what ComfyUI actually returned. |
 
 `app.js` exposes `window.__cinematographer`
-(`{ state, view, compute, render, engine, panel, director, directorState, directorPanel, showTab }`) as
-a debug hook; the browser check uses it to drive both tabs and to force a render and read pixels.
+(`{ state, view, compute, render, engine, panel, director, directorState, directorPanel, studio,
+elementsPanel, shootPanel, postPanel, runPanel, studioPanel, comfyClient, showTab }`) as
+a debug hook; the browser check uses it to drive every tab and to force a render and read pixels.
 
 ---
 
 ## Using the panel
+
+### Studio tab — start here
+
+**This is the tab the panel opens on.** One scene box, four dropdowns, one button: the shape of
+Comfy Org's reference app, so a stranger can use it without reading anything below.
+
+- **Scene** — one sentence. `@name` resolves against the Element registry, exactly as on the Shoot
+  tab, because it is the same parser. The default scene carries no `@tag`, so a first Generate is
+  clean on any server; see the `@`-tag note below for why a tag cannot promise that.
+- **Shot / Camera / Light / Look** — their four lists, verbatim (5 / 4 / 4 / 4 options). Each choice
+  resolves to real engine values, and the mapping is checked against `director.js`'s enums at module
+  load; the *Their words → our engine* card shows the translation and the check's result.
+- **The verdict** — the nine per-frame rules, each measured and each pass or fail, with the engine's
+  own correction lever for every rule that failed. **This is the difference.** Their app can only
+  ever show you a string; this shows you the measured framing result.
+- **Auto-frame the camera** — solves a camera for the shot you picked and adopts it *in this tab
+  only*. It never writes to the Director tab's state, so switching tabs cannot silently change what
+  another tab was showing. Changing any dropdown clears the solve.
+- **Generate** — runs the real graph through the Run tab's own machinery and shows what came back,
+  including whether the panel's verdict and the server's agree.
+
+The camera's *position* is inherited from the Director tab; these four choices set the shot, the
+lens, the light and the look on top of it. The server address is the Run tab's field.
 
 ### Director tab
 

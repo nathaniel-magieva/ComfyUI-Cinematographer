@@ -460,6 +460,65 @@ async function useServerDefault() {
   renderRun();
 }
 
+/**
+ * The whole live pipeline, with no DOM in it.
+ *
+ * `runLive` renders this; the Studio tab renders the same result its own way.
+ * There is exactly one probe, one POST, one poll and one place where
+ * `node_errors` is read — a second copy of this sequence would be a second
+ * chance to disagree about what a 200 means.
+ *
+ * `makeInput(probe)` is called only after the probe succeeds, so a caller can
+ * fill in a registry path the server published before building the graph.
+ * `opts.onStatus(stage, data)` fires at each step boundary; stages are
+ * `probe`, `built`, `queued`, `done`.
+ *
+ * Returns a discriminated result. `ok: false` carries `stage` and whatever was
+ * learned up to that point; it never throws for an expected failure.
+ */
+export async function executeLive(base, makeInput, opts = {}) {
+  const onStatus = typeof opts.onStatus === 'function' ? opts.onStatus : () => {};
+
+  onStatus('probe', { base });
+  const probe = await CC.probeServer(base);
+  if (!probe.ok) return { ok: false, stage: 'probe', probe };
+
+  const input = makeInput(probe);
+  const built = CC.buildGraph(input);
+  onStatus('built', { probe, built, input });
+
+  const unknown = built.classTypes.filter((c) => !probe.classes.includes(c));
+  if (unknown.length) return { ok: false, stage: 'classes', probe, built, input, unknown };
+
+  const submit = await CC.submitPrompt(base, built.graph, CC.newClientId());
+  if (!submit.ok) return { ok: false, stage: 'submit', probe, built, input, submit };
+
+  // A 200 with a prompt_id is NOT a clean bill of health. ComfyUI validates
+  // each output node separately: an output that fails validation is dropped
+  // from the run and named only in `node_errors`, and the prompt still runs.
+  // Reporting "success" without that would be a fabricated pass.
+  const rejected = Object.entries(submit.node_errors ?? {});
+  onStatus('queued', { probe, built, input, submit, rejected });
+
+  const hist = await CC.awaitHistory(base, submit.prompt_id);
+  if (!hist.ok) {
+    return { ok: false, stage: 'history', probe, built, input, submit, rejected, error: hist.error };
+  }
+
+  const result = {
+    ok: true,
+    stage: 'done',
+    probe,
+    built,
+    input,
+    submit,
+    rejected,
+    record: hist.record,
+  };
+  onStatus('done', result);
+  return result;
+}
+
 async function runLive() {
   if (busy) return;
   busy = true;
@@ -472,78 +531,83 @@ async function runLive() {
   };
 
   try {
-    setStatus(`Checking <code>${escapeHtml(base)}</code> …`);
-    const probe = await CC.probeServer(base);
-    lastProbe = probe;
-    renderServerStatus(probe);
+    const res = await executeLive(
+      base,
+      (probe) => {
+        lastProbe = probe;
+        renderServerStatus(probe);
+        const pathInput = $('r-registry-path');
+        if (!(pathInput?.value ?? '').trim() && probe.registryDefault) {
+          pathInput.value = probe.registryDefault;
+        }
+        return collect();
+      },
+      {
+        onStatus: (stage, d) => {
+          if (stage === 'probe') {
+            setStatus(`Checking <code>${escapeHtml(base)}</code> …`);
+          } else if (stage === 'built') {
+            lastBuilt = d.built;
+            renderRun();
+            setStatus(`Submitting ${d.built.nodeCount} nodes to <code>${escapeHtml(base)}</code> …`);
+          } else if (stage === 'queued') {
+            lastNodeErrorsValue = d.submit.node_errors ?? {};
+            if (d.rejected.length) {
+              renderNodeErrors(d.submit.node_errors);
+              setStatus(
+                `ComfyUI <strong>accepted</strong> the prompt as `
+                + `<code>${escapeHtml(d.submit.prompt_id)}</code> but rejected `
+                + `<strong>${d.rejected.length} node(s)</strong> at validation. Those nodes and `
+                + 'everything downstream of them were dropped from the run, so the taps below are '
+                + 'only part of the graph. The engine\'s own reasons are listed under "What the '
+                + 'engine returned".',
+              );
+            } else {
+              setStatus(
+                `Queued <code>${escapeHtml(d.submit.prompt_id)}</code> · polling `
+                + '<code>/history</code> …',
+              );
+            }
+          }
+        },
+      },
+    );
 
-    if (!probe.ok) {
-      setStatus(
-        `No ComfyUI answered at <code>${escapeHtml(base)}</code> — ${escapeHtml(probe.error)}. `
-        + '<strong>Nothing was sent.</strong> The prompt JSON on the right is complete: paste it '
-        + "into ComfyUI's API workflow, or start the server and press Run again.",
-      );
+    if (!res.ok) {
+      if (res.stage === 'probe') {
+        setStatus(
+          `No ComfyUI answered at <code>${escapeHtml(base)}</code> — ${escapeHtml(res.probe.error)}. `
+          + '<strong>Nothing was sent.</strong> The prompt JSON on the right is complete: paste it '
+          + "into ComfyUI's API workflow, or start the server and press Run again.",
+        );
+      } else if (res.stage === 'classes') {
+        setStatus(
+          `The server does not know ${res.unknown.length} class(es): `
+          + `<code>${escapeHtml(res.unknown.join(', '))}</code>. <strong>Not sending</strong> — a `
+          + 'graph with an unknown class would be rejected.',
+        );
+      } else if (res.stage === 'submit') {
+        setStatus(escapeHtml(CC.describeSubmitFailure(res.submit)));
+        renderNodeErrors(res.submit.node_errors);
+      } else if (res.stage === 'history') {
+        setStatus(
+          `Submitted as <code>${escapeHtml(res.submit.prompt_id)}</code>, but `
+          + `${escapeHtml(res.error)}. The run may still be executing; nothing is claimed about `
+          + 'its result.',
+        );
+      }
       return;
     }
 
-    const pathInput = $('r-registry-path');
-    if (!(pathInput?.value ?? '').trim() && probe.registryDefault) {
-      pathInput.value = probe.registryDefault;
-    }
-
-    const input = collect();
-    const built = CC.buildGraph(input);
-    lastBuilt = built;
-    renderRun();
-
-    const unknown = built.classTypes.filter((c) => !probe.classes.includes(c));
-    if (unknown.length) {
-      setStatus(
-        `The server does not know ${unknown.length} class(es): `
-        + `<code>${escapeHtml(unknown.join(', '))}</code>. <strong>Not sending</strong> — a graph `
-        + 'with an unknown class would be rejected.',
-      );
-      return;
-    }
-
-    setStatus(`Submitting ${built.nodeCount} nodes to <code>${escapeHtml(base)}</code> …`);
-    const submit = await CC.submitPrompt(base, built.graph, CC.newClientId());
-    if (!submit.ok) {
-      setStatus(escapeHtml(CC.describeSubmitFailure(submit)));
-      renderNodeErrors(submit.node_errors);
-      return;
-    }
-
-    // A 200 with a prompt_id is NOT a clean bill of health. ComfyUI validates
-    // each output node separately: an output that fails validation is dropped
-    // from the run and named only in `node_errors`, and the prompt still runs.
-    // Saying "success" here without saying that would be a fabricated pass.
-    const rejected = Object.entries(submit.node_errors ?? {});
-    lastNodeErrorsValue = submit.node_errors ?? {};
-    if (rejected.length) {
-      renderNodeErrors(submit.node_errors);
-      setStatus(
-        `ComfyUI <strong>accepted</strong> the prompt as <code>${escapeHtml(submit.prompt_id)}</code> `
-        + `but rejected <strong>${rejected.length} node(s)</strong> at validation. Those nodes and `
-        + 'everything downstream of them were dropped from the run, so the taps below are only '
-        + 'part of the graph. The engine\'s own reasons are listed under "What the engine '
-        + 'returned".',
-      );
-    } else {
-      setStatus(
-        `Queued <code>${escapeHtml(submit.prompt_id)}</code> · polling <code>/history</code> …`,
-      );
-    }
-    const hist = await CC.awaitHistory(base, submit.prompt_id);
-    if (!hist.ok) {
-      setStatus(
-        `Submitted as <code>${escapeHtml(submit.prompt_id)}</code>, but ${escapeHtml(hist.error)}. `
-        + 'The run may still be executing; nothing is claimed about its result.',
-      );
-      return;
-    }
-
-    renderResult(base, submit.prompt_id, hist.record, built, input, rejected.length, submit.node_errors);
+    renderResult(
+      base,
+      res.submit.prompt_id,
+      res.record,
+      res.built,
+      res.input,
+      res.rejected.length,
+      res.submit.node_errors,
+    );
   } catch (err) {
     setStatus(
       `The run threw: ${escapeHtml(err?.message ?? err)}. Nothing is claimed about the result.`,
