@@ -241,10 +241,11 @@ looks solved.
 
 | Thing | Status |
 |---|---|
-| **Video generation** | **Not wired to a live ComfyUI at all.** Neither tab generates anything. There is no LTX, no CrossView-Warp, no MoGe-2, no depth pass, no render. The Generate button is **disabled** and says so. |
-| **The Director tab's plan** | It is a plan, not a request. Nothing is sent anywhere; there is no network call in the panel. |
+| **Video generation** | **Still not wired.** No tab generates an image or a video. There is no LTX, no CrossView-Warp, no MoGe-2, no depth pass, no render, and `CinemaGradeApply` still has no `IMAGE` to consume. The Generate button is **disabled** and says so. |
+| **The Run tab** | **Really wired, and the only thing that is.** It builds a ComfyUI API prompt from the current state, POSTs it to a configurable base URL (default `http://127.0.0.1:8188`), polls `/history/<prompt_id>`, and renders the values the engine returned. It still produces no image and no video: the graph terminates in stock `PreviewAny` taps, which render text. With no server it says so on screen and sends nothing. |
+| **The Director tab's plan** | It is a plan, not a request. Nothing is sent *from that tab*; the Run tab is the one that sends. |
 | **The Element registry** | Three demo Elements (`@tamsincamp`, `@the-diner`, `@chrome-revolver`) so the `@` mechanism is visible with nothing wired up. Not loaded from a project. |
-| **The emotion wheel** | 9 names, being the union of the on-screen wheel and the settings reference (they differ by `Interest` vs `Hope`). The wheel is visibly larger than its visible arc, so this is a floor. One tutorial claims 80 emotions across three strength levels; that is unverified and not implemented. |
+| **The emotion wheel** | 9 names, being the union of the on-screen wheel and the settings reference (they differ by `Interest` vs `Hope`). The wheel is visibly larger than its visible arc, so this is a floor. One tutorial claims 80 emotions across three strength levels; that is unverified and not implemented. The panel spells them as slugs (`sadness`); `CinemaDirectorPanel`'s COMBO is Title Case (`Sadness`) and ComfyUI validates a COMBO by exact membership, so `comfy_client.ENGINE_EMOTIONS` translates on the way out and the parity check asserts it equals `director.EMOTIONS` exactly. |
 | **Emotion intensity** | Continuous 0–1. The evidence claims three strength levels but **no strength control was legible in any frame**, so the cut points are unknown — the three words on screen are descriptors on the scale, not enum members. |
 | **The subject** | A synthetic figure at a fixed world position (base `(0,0,0)`, height 1.75 m, facing yaw 0). There is no clip, no frame, and no depth analysis — nothing was measured from footage. |
 | **The 3D viewport** | An *illustration*, not a render. The subject is a capsule and a sphere; the frustum is a three.js `CameraHelper`. It shows you where the camera is, not what it sees. |
@@ -262,6 +263,13 @@ looks solved.
   because there is nothing to send it as.
 - **The UI tab says `Tempo`; the API field is `pacing`.** The panel labels the control *Tempo* and
   sends `pacing`.
+- **The emotion wheel is spelled two ways, and only one of them runs.** The panel's list is slugs
+  (`sadness`); `CinemaDirectorPanel`'s COMBO is Title Case (`Sadness`). Measured against a live
+  ComfyUI 0.43.0: sending the slug makes that node fail validation, and ComfyUI then drops the node
+  *and every node downstream of it* — the whole `CinemaPromptCompose` chain and four of the seven
+  `PreviewAny` taps — while still answering **HTTP 200 with a `prompt_id`** and reporting
+  `status_str: "success"`. The dropped nodes are named only in the response's `node_errors`, so the
+  Run tab now refuses to call such a run clean and the browser check asserts `node_errors` is empty.
 
 ### three.js
 

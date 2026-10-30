@@ -571,6 +571,34 @@ def compare_director(
                 + (" …" if len(missing) > 6 else "")
             )
 
+    # --- the emotion COMBO the panel actually SENDS -------------------------
+    # The comparison above is deliberately case-insensitive, because the panel
+    # spells the emotion wheel as slugs and the engine spells it in Title Case.
+    # That is fine for *display* and wrong for *transport*: ComfyUI validates a
+    # COMBO by exact membership, so a slug is rejected. Measured against a live
+    # ComfyUI 0.43.0: sending "sadness" makes `CinemaDirectorPanel` fail
+    # validation, and ComfyUI then drops that node and every node downstream of
+    # it — the whole `CinemaPromptCompose` chain and four of the seven
+    # `PreviewAny` taps — while still answering HTTP 200 with a `prompt_id` and
+    # reporting `status_str: "success"`. The dropped nodes appear only in
+    # `node_errors`.
+    #
+    # `comfy_client.ENGINE_EMOTIONS` is what the panel puts on the wire, so it
+    # must equal the engine's list EXACTLY. This is the check that would have
+    # caught the silent partial run.
+    engine_emotions = getattr(engine_mods["director"], "EMOTIONS", None)
+    sent_emotions = (js.get("comfy") or {}).get("engine_emotions")
+    if engine_emotions is not None and sent_emotions is not None:
+        checked += 1
+        want = [str(v) for v in engine_emotions]
+        got = [str(v) for v in sent_emotions]
+        if got != want:
+            failures.append(
+                Mismatch("enum_emotion", "comfy_client.ENGINE_EMOTIONS (exact)", want, got)
+            )
+        else:
+            ok += 1
+
     return checked, ok, True
 
 

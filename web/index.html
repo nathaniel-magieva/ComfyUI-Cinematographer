@@ -48,6 +48,9 @@
   <button class="tab" data-tab="post" role="tab" aria-selected="false" type="button">
     Post <span class="tab-sub">grades the take</span>
   </button>
+  <button class="tab" data-tab="run" role="tab" aria-selected="false" type="button">
+    Run <span class="tab-sub">drives ComfyUI</span>
+  </button>
   <span class="tabnav-note" id="tabnav-note">
     The Director tab composes a plan. It does not generate anything.
   </span>
@@ -860,11 +863,113 @@
 
   </section>
 </div>
+
+<!-- ===================== TAB 6: RUN (drives ComfyUI) ===================== -->
+<div id="tab-run" class="tabpanel layout hidden">
+
+  <section class="col-left">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>ComfyUI server</h2>
+        <span class="hint">POST /prompt · GET /history/&lt;id&gt;</span>
+      </div>
+      <div class="control-grid">
+        <div class="control control-wide">
+          <label for="r-base-url">Base URL</label>
+          <input id="r-base-url" type="text" value="http://127.0.0.1:8188" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="control control-wide">
+          <label for="r-registry-path">Element registry path on the server</label>
+          <input id="r-registry-path" type="text" value="" spellcheck="false" autocomplete="off"
+                 placeholder="cinematographer/elements.json" />
+        </div>
+      </div>
+      <div class="generate-row">
+        <button id="r-check" class="btn btn-ghost" type="button">Check server</button>
+        <button id="r-use-default" class="btn btn-ghost" type="button">Use the server's default path</button>
+      </div>
+      <div class="control">
+        <label class="switch">
+          <input id="r-write-elements" type="checkbox" />
+          <span id="r-write-label">also write this panel's Elements to the server</span>
+        </label>
+      </div>
+      <p class="card-foot" id="r-server-status">Not checked yet.</p>
+      <p class="card-foot dim" id="r-registry-note">—</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Run</h2>
+        <span class="hint">the five tabs' current state, as an API prompt</span>
+      </div>
+      <div class="generate-row">
+        <button id="r-build" class="btn btn-ghost" type="button">Build prompt</button>
+        <button id="r-run" class="btn btn-primary" type="button">Run in ComfyUI</button>
+      </div>
+      <p class="card-foot" id="r-run-status">Nothing has been sent.</p>
+      <p class="card-foot dim" id="r-notes">—</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What the engine returned</h2>
+        <span class="hint" id="r-ran">—</span>
+      </div>
+      <div id="r-taps" class="tap-list"></div>
+      <div id="r-errors"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Panel vs engine</h2>
+        <span class="hint">a live parity check</span>
+      </div>
+      <p class="card-foot" id="r-reconcile">—</p>
+    </div>
+
+  </section>
+
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>API prompt</h2>
+        <span class="hint" id="r-graph-stats">—</span>
+      </div>
+      <div class="generate-row">
+        <button id="r-copy" class="btn btn-ghost" type="button">Copy JSON</button>
+      </div>
+      <pre class="plan-pre plan-pre-tall" id="r-json">—</pre>
+      <p class="card-foot">
+        This is the exact object sent as <code>{"prompt": …}</code>. It is built from the
+        five tabs' current state and needs no server at all — paste it into ComfyUI's own
+        API workflow, or POST it yourself.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What this does not do</h2>
+      </div>
+      <p class="card-foot">
+        A run executes the graph and returns the engine's own text. It does
+        <strong>not</strong> generate an image or a video: the pack ships no
+        <code>IMAGE</code> node, so <code>CinemaGradeApply</code> has nothing to consume.
+        The graph ends in <code>PreviewAny</code> taps, which is what makes it runnable
+        at all — the pack's only <code>OUTPUT_NODE</code> is
+        <code>CinemaElementSave</code>, which writes to disk.
+      </p>
+    </div>
+
+  </section>
+</div>
 </main>
 
 <footer class="footer">
-  <span id="provenance">geometry: web/cinematographer.js ↔ cinematographer/ (Python) · stages 1/2/4/5: web/studio.js ↔ cinematographer/ (Python)</span>
-  <span class="dim">No render is wired to a live ComfyUI in this panel — see README.md.</span>
+  <span id="provenance">geometry: web/cinematographer.js ↔ cinematographer/ (Python) · stages 1/2/4/5: web/studio.js ↔ cinematographer/ (Python) · API prompt + live run: web/comfy_client.js ↔ ComfyUI <code>/prompt</code></span>
+  <span class="dim" id="provenance-live">No run has been sent from this page yet.</span>
 </footer>
 
 <script type="module" src="./app.js"></script>

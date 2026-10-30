@@ -719,3 +719,51 @@ select.flagged { border-color: var(--fail); }
 }
 .gate-badge.open { border-color: var(--pass); background: var(--pass-bg); color: var(--pass); }
 .gate-badge.closed { border-color: var(--warn); background: rgba(242, 181, 60, 0.1); color: var(--warn); }
+
+/* ==========================================================================
+   Stage 6 — the Run tab.
+   Additive only: nothing above this line is touched, so the five earlier tabs
+   render exactly as they did.
+   ========================================================================== */
+
+/* One engine read-out: the node that produced it, then its text. */
+.tap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tap-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.tap-head {
+  font-size: 11px;
+  color: var(--dim);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.tap-head code {
+  color: var(--text);
+  margin-right: 6px;
+}
+.tap-item .plan-pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+}
+
+/* The prompt JSON is the one thing on this tab that needs no server, so it gets
+   the room to be read and copied. */
+#r-json {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+/* A disabled control must look disabled: a Run button that silently does
+   nothing while a request is in flight is worse than a greyed-out one. */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

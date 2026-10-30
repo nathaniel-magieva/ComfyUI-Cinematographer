@@ -227,7 +227,8 @@ export function initShootPanel() {
       + 'Attachment shape: <code>cinematographer/prompt.py</code> '
       + '(<code>ComposedPrompt.attachments</code> → <code>token</code>, <code>name</code>, '
       + '<code>asset_path</code>). '
-      + 'Nothing is sent anywhere: this page has no server and no ComfyUI connection.';
+      + 'Nothing is sent from this tab. The Run tab is what sends: it exports this '
+      + 'composition as a ComfyUI API prompt and can POST it to a live server.';
   }
 
   renderShoot();

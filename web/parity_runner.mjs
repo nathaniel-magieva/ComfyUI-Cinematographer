@@ -23,6 +23,7 @@ import {
 } from './cinematographer.js';
 import * as DIR from './director.js';
 import * as STUDIO from './studio.js';
+import * as COMFY from './comfy_client.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixturesPath = process.argv[2] ? resolve(process.argv[2]) : resolve(HERE, 'parity_fixtures.json');
@@ -113,6 +114,13 @@ for (const fx of fixtures.director.credits) {
     discounted: cost.discounted,
   });
 }
+
+// The emotion combo, as the node publishes it. The panel's own `EMOTION` list is
+// slugs; `CinemaDirectorPanel`'s COMBO is Title Case and ComfyUI validates a
+// COMBO by exact membership. `comfy_client.ENGINE_EMOTIONS` is what the panel
+// actually sends, and it is checked here so it cannot drift into a hand-typed
+// second source of truth.
+out.comfy = { engine_emotions: [...COMFY.ENGINE_EMOTIONS] };
 
 // --- Stages 1 / 2 / 4 / 5 (Elements, Shoot, Post) ---------------------------
 // `studio.js` mirrors `elements.py`, `post.py` and `nodes.py`. For the cases the

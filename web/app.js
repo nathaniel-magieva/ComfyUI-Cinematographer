@@ -17,6 +17,8 @@ import * as S from './studio.js';
 import * as EP from './elements_panel.js';
 import * as SP from './shoot_panel.js';
 import * as PP from './post_panel.js';
+import * as RP from './run_panel.js';
+import * as CC from './comfy_client.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -705,7 +707,7 @@ function runAutoFrame() {
 // The three later tabs are additive: `showTab` still coerces an unknown name to
 // 'director', and the Director and Judge panels are untouched.
 
-const TABS = ['director', 'judge', 'elements', 'shoot', 'post'];
+const TABS = ['director', 'judge', 'elements', 'shoot', 'post', 'run'];
 
 const TAB_NOTES = {
   director: 'The Director tab composes a plan. It does not generate anything.',
@@ -716,6 +718,8 @@ const TAB_NOTES = {
     'The Shoot tab composes the prompt from the Director tab\'s parameters. It sends nothing.',
   post:
     'The Post tab describes a grade. CinemaGradeApply is what changes pixels, and it needs an image this panel does not have.',
+  run:
+    'The Run tab sends the prompt to a live ComfyUI and shows what the engine returned. It still generates no image and no video.',
 };
 
 function showTab(name) {
@@ -743,6 +747,7 @@ function showTab(name) {
   if (name === 'elements') EP.renderElements();
   if (name === 'shoot') SP.renderShoot();
   if (name === 'post') PP.renderPost();
+  if (name === 'run') RP.renderRun();
 }
 
 function wireTabs() {
@@ -782,6 +787,7 @@ async function boot() {
     EP.initElementsPanel();
     SP.initShootPanel();
     PP.initPostPanel({ getReport: () => P.compute(state).report });
+    RP.initRunPanel({ getState: () => state });
   } catch (err) {
     window.__panelErrors.push(`boot: ${err.message}`);
     throw err;
@@ -804,6 +810,8 @@ async function boot() {
     elementsPanel: EP,
     shootPanel: SP,
     postPanel: PP,
+    runPanel: RP,
+    comfyClient: CC,
     showTab,
   };
 

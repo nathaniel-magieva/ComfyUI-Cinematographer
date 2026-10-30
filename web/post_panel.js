@@ -49,7 +49,13 @@ const fmt = (v) => (v >= 0 ? '+' : '') + Number(v).toFixed(2);
 // Reading the controls
 // ---------------------------------------------------------------------------
 
-function readGrade() {
+/**
+ * The seven grade controls, as the Post tab reads them.
+ *
+ * Exported so the Run tab sends the *same* values this tab displays rather than
+ * re-reading the sliders through a second code path.
+ */
+export function readGrade() {
   const settings = {};
   for (const param of S.GRADE_PARAMS) {
     const input = $(`p-grade-${param}`);

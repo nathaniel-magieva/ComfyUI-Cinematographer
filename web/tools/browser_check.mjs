@@ -13,7 +13,13 @@
  *   - moving a slider changes the measured values live
  *   - pressing Auto-Frame converges and flips the panel to overall PASS
  *   - "Check continuity" renders verdicts for both rules on both cuts
+ *   - the Run tab exports a real API prompt, and — when a ComfyUI is listening
+ *     on 127.0.0.1:8188 — POSTs it, polls /history and renders what came back
  *   - a screenshot is written for the record
+ *
+ * The live half of the Run checks is skipped, with a stated reason, when no
+ * ComfyUI answers. The exported prompt JSON is checked either way, because it
+ * needs no server.
  *
  * Exit code 0 = every assertion held.
  */
@@ -23,8 +29,16 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// The panel's own ComfyUI client, imported rather than re-implemented: the
+// Stage 6 checks must exercise the module the page actually runs. Node 24
+// detects the ESM syntax in the `.js` file, so no package.json is needed.
+import * as CC from '../comfy_client.js';
+
 const URL_ = process.argv[2] ?? 'http://127.0.0.1:8765/';
 const SHOT = process.argv[3] ?? join(tmpdir(), 'cinematographer-panel.png');
+
+/** Where the live ComfyUI is expected. Overridable for a non-default port. */
+const COMFY = process.env.CINE_COMFY_URL ?? CC.DEFAULT_BASE_URL;
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -916,11 +930,425 @@ try {
   }
 
   const lateErrors = await evaluate('JSON.stringify(window.__panelErrors || [])');
-  ok(lateErrors === '[]', 'no JS errors after exercising all five tabs', lateErrors);
+  ok(lateErrors === '[]', 'no JS errors after exercising all six tabs', lateErrors);
 
   // Leave the panel where the rest of this check expects it.
   await evaluate(`document.querySelector('#tabnav [data-tab="judge"]').click(), true`);
   await sleep(200);
+
+  // -------------------------------------------------------------------------
+  // Stage 6 — the Run tab: export an API prompt, and run it live
+  // -------------------------------------------------------------------------
+
+  console.log('\n[R1] Run tab — the affordance exists and the exported prompt is real');
+
+  const affordance = await evaluate(`(() => {
+    const btn = document.querySelector('#tabnav [data-tab="run"]');
+    if (!btn) return { found: false };
+    btn.click();
+    return {
+      found: true,
+      visible: !document.getElementById('tab-run').classList.contains('hidden'),
+      hasRun: !!document.getElementById('r-run'),
+      hasBase: !!document.getElementById('r-base-url'),
+      hasJson: !!document.getElementById('r-json'),
+      hasTaps: !!document.getElementById('r-taps'),
+      base: document.getElementById('r-base-url').value,
+      note: document.getElementById('tabnav-note').textContent.trim(),
+    };
+  })()`);
+  ok(affordance.found, 'the Run tab button exists');
+  ok(affordance.visible, 'clicking it shows the Run panel');
+  ok(
+    affordance.hasRun && affordance.hasBase && affordance.hasJson && affordance.hasTaps,
+    'the affordance is complete — Run button, base URL, prompt JSON, results list',
+  );
+  ok(
+    affordance.base === CC.DEFAULT_BASE_URL,
+    'the base URL defaults to the local ComfyUI',
+    affordance.base,
+  );
+  ok(
+    /generates no image and no video/.test(affordance.note),
+    'the tab note still says a run generates no image and no video',
+    affordance.note.slice(0, 72),
+  );
+
+  const exported = await evaluate(`(() => {
+    const shown = document.getElementById('r-json').textContent;
+    let graph;
+    try { graph = JSON.parse(shown); } catch (e) { return { parseError: String(e.message) }; }
+    const RP = window.__cinematographer.runPanel;
+    const CC = window.__cinematographer.comfyClient;
+    const fresh = JSON.stringify(CC.buildGraph(RP.collect()).graph, null, 2);
+    const nodes = Object.values(graph);
+    const collected = RP.collect();
+    return {
+      graph,
+      nodeCount: nodes.length,
+      classes: [...new Set(nodes.map((n) => n.class_type))].sort(),
+      previews: nodes.filter((n) => n.class_type === 'PreviewAny').length,
+      isFresh: fresh === shown,
+      stats: document.getElementById('r-graph-stats').textContent.trim(),
+      // The panel spells the emotion wheel as slugs; the node's COMBO is Title
+      // Case and ComfyUI validates a COMBO by exact membership. Sending the slug
+      // makes the server drop the node and everything downstream of it while
+      // still answering HTTP 200 — a silent partial run.
+      panelEmotion: (collected.director.emotions ?? [])[0]?.emotion ?? null,
+      sentEmotion: graph['1']?.inputs?.emotion ?? null,
+      engineEmotions: [...CC.ENGINE_EMOTIONS],
+    };
+  })()`);
+  ok(!exported.parseError, 'the prompt pane holds parseable JSON', exported.parseError ?? '');
+  ok(
+    exported.isFresh,
+    'the pane is the live graph, not a stale copy — it rebuilds byte-identical from current state',
+    `${exported.nodeCount} nodes`,
+  );
+  ok(
+    exported.classes.every((c) => c === CC.PREVIEW_NODE || c.startsWith('Cinema')),
+    "every class_type is one of the pack's own nodes or the stock output node",
+    exported.classes.join(', '),
+  );
+  ok(
+    exported.previews >= 1,
+    'the graph terminates in a stock output node, so ComfyUI will accept it',
+    `${exported.previews} ${CC.PREVIEW_NODE} taps`,
+  );
+  // The emotion the panel puts on the wire must be the node's exact COMBO
+  // member, never the panel's own slug.
+  ok(
+    exported.sentEmotion === 'auto' || exported.engineEmotions.includes(exported.sentEmotion),
+    "the emotion sent to CinemaDirectorPanel is the node's exact COMBO member",
+    `panel slug ${JSON.stringify(exported.panelEmotion)} -> sent ${JSON.stringify(exported.sentEmotion)}`,
+  );
+  if (exported.panelEmotion) {
+    const want = exported.engineEmotions.find(
+      (e) => e.toLowerCase() === String(exported.panelEmotion).toLowerCase(),
+    );
+    ok(
+      exported.sentEmotion === want,
+      'an emotion chosen in the Director tab is translated, not passed through raw',
+      `${JSON.stringify(exported.panelEmotion)} -> ${JSON.stringify(exported.sentEmotion)}`,
+    );
+  }
+
+  // The live server decides whether the live half runs. Probed from Node, so a
+  // skip is a fact about the machine rather than a swallowed browser failure.
+  let serverUp = false;
+  let objectInfo = null;
+  let serverWhy = `no ComfyUI answered at ${COMFY} within 4000 ms`;
+  try {
+    const stats = await fetch(`${COMFY}/system_stats`, { signal: AbortSignal.timeout(4000) });
+    serverUp = stats.ok;
+    if (serverUp) {
+      const oi = await fetch(`${COMFY}/object_info`, { signal: AbortSignal.timeout(30000) });
+      if (oi.ok) objectInfo = await oi.json();
+    } else {
+      serverWhy = `${COMFY}/system_stats -> HTTP ${stats.status}`;
+    }
+  } catch (err) {
+    serverWhy = `${COMFY} unreachable — ${err?.message ?? err}`;
+  }
+
+  if (objectInfo) {
+    const unknown = exported.classes.filter((c) => !(c in objectInfo));
+    ok(
+      unknown.length === 0,
+      'the server knows every class_type in the exported prompt',
+      unknown.length ? unknown.join(', ') : `${exported.classes.length} classes checked`,
+    );
+  } else {
+    ok(true, `class_type check against /object_info skipped — ${serverWhy}`, 'the pack ships these classes');
+  }
+
+  console.log('\n[R2] Run tab — prompt_no_outputs is reported, not swallowed');
+  if (serverUp) {
+    const stripped = Object.fromEntries(
+      Object.entries(exported.graph ?? {}).filter(([, n]) => n.class_type !== CC.PREVIEW_NODE),
+    );
+    ok(
+      Object.keys(stripped).length === exported.nodeCount - exported.previews,
+      'the stripped graph really is the prompt minus its taps',
+      `${Object.keys(stripped).length} of ${exported.nodeCount} nodes kept`,
+    );
+    const res = await fetch(`${COMFY}/prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: stripped, client_id: 'cine-browser-check' }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const body = await res.json();
+    ok(
+      res.status === 400 && body?.error?.type === 'prompt_no_outputs',
+      'stripping the taps reproduces the real prompt_no_outputs 400',
+      `HTTP ${res.status} ${body?.error?.type ?? '?'}`,
+    );
+    const sentence = CC.describeSubmitFailure({
+      ok: false,
+      status: res.status,
+      error: body?.error ?? null,
+      node_errors: body?.node_errors ?? {},
+    });
+    ok(
+      /prompt_no_outputs/.test(sentence) && /PreviewAny/.test(sentence),
+      'the panel turns that failure into a sentence that names the cause',
+      sentence.slice(0, 88),
+    );
+  } else {
+    ok(true, `prompt_no_outputs check skipped — ${serverWhy}`, 'start ComfyUI to exercise this path');
+  }
+
+  console.log('\n[R3] Run tab — a real POST, poll and render');
+  if (!serverUp) {
+    ok(
+      true,
+      `live run skipped — ${serverWhy}`,
+      'the exported prompt JSON above is complete and needs no server',
+    );
+    const skipped = await evaluate(
+      `document.getElementById('r-run-status').textContent.trim()`,
+    );
+    ok(
+      /Nothing has been sent/.test(skipped),
+      'with no server, the panel claims nothing — the status line is still the initial one',
+      skipped,
+    );
+
+    // The panel's own no-server path, exercised for real rather than skipped:
+    // point it at a port nothing can be listening on and click Run. It must say
+    // so on screen and send nothing — no fabricated success.
+    await evaluate(`(() => {
+      const f = document.getElementById('r-base-url');
+      f.value = 'http://127.0.0.1:1';
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('r-run').click();
+      return true;
+    })()`);
+    await waitFor(
+      `document.getElementById('r-run-status').textContent.includes('No ComfyUI answered')`,
+      'the panel to report the dead server',
+      30000,
+    );
+    const refused = await evaluate(
+      `document.getElementById('r-run-status').textContent.trim()`,
+    );
+    ok(
+      /No ComfyUI answered at/.test(refused),
+      'the panel says on screen that no server answered, and names the address',
+      refused.slice(0, 120),
+    );
+    ok(
+      /Nothing was sent/.test(refused),
+      'the panel states plainly that nothing was sent',
+      refused.slice(0, 120),
+    );
+    const tapsAfter = await evaluate(`document.querySelectorAll('#r-taps .tap-item').length`);
+    ok(
+      tapsAfter === 0,
+      'no taps are rendered, because no run happened',
+      `${tapsAfter} tap blocks`,
+    );
+  } else {
+    await evaluate(`document.getElementById('r-run').click(), true`);
+    await waitFor(
+      `(() => {
+        const t = document.getElementById('r-run-status').textContent;
+        return /taps returned output in this record|it failed|Nothing was sent|rejected|does not know|threw|nothing is claimed/.test(t);
+      })()`,
+      'the run to settle',
+      240000,
+    );
+
+    const result = await evaluate(`(() => {
+      const RP = window.__cinematographer.runPanel;
+      const C = window.__cinematographer.engine;
+      const P = window.__cinematographer.panel;
+      const state = window.__cinematographer.state;
+      const report = P.compute(state).report;
+      const taps = [...document.querySelectorAll('#r-taps .tap-item')].map((n) => ({
+        head: n.querySelector('.tap-head').textContent.trim(),
+        text: n.querySelector('.plan-pre')?.textContent ?? null,
+        note: n.querySelector('.card-foot')?.textContent.trim() ?? null,
+      }));
+      const rec = RP.lastRecord();
+      const cachedMsg = (rec?.status?.messages ?? []).find((m) => m[0] === 'execution_cached');
+      return {
+        status: document.getElementById('r-run-status').textContent.trim(),
+        ran: document.getElementById('r-ran').textContent.trim(),
+        reconcile: document.getElementById('r-reconcile').textContent.trim(),
+        errors: document.getElementById('r-errors').textContent.trim(),
+        footer: document.getElementById('provenance-live').textContent.trim(),
+        taps,
+        panelSummary: C.summary(report),
+        outputKeys: Object.keys(rec?.outputs ?? {}),
+        cachedNodes: cachedMsg?.[1]?.nodes ?? null,
+        nodeErrors: Object.keys(RP.lastNodeErrors() ?? {}),
+      };
+    })()`);
+
+    const diag =
+      `outputs=${JSON.stringify(result.outputKeys)} cached=${JSON.stringify(result.cachedNodes)} `
+      + `node_errors=${JSON.stringify(result.nodeErrors)}`;
+
+    ok(
+      /taps returned output in this record/.test(result.status),
+      'the panel reports the run it actually received',
+      result.status.slice(0, 110),
+    );
+    ok(
+      /^7 \/ 7 taps returned output in this record/.test(result.ran),
+      'all seven taps returned output — the graph ran whole',
+      `${result.ran} · ${diag}`,
+    );
+    // The direct check for a silent partial run. ComfyUI answers 200 with a
+    // `prompt_id` even when it has dropped output nodes at validation, naming
+    // them only in `node_errors`. A non-empty set here means the panel ran a
+    // graph the server had already rejected in part.
+    ok(
+      result.nodeErrors.length === 0,
+      'ComfyUI accepted every node — nothing was dropped at validation',
+      diag,
+    );
+    ok(
+      result.taps.length === 7 &&
+        result.taps.every((t) => t.text !== null || (t.note ?? '').length > 20),
+      'every tap either shows its value or states on screen why it has none',
+      `${result.taps.filter((t) => t.text !== null).length} with values, `
+        + `${result.taps.filter((t) => t.text === null).length} explained · ${diag}`,
+    );
+    ok(
+      result.taps.filter((t) => t.text === null).length === 0,
+      'no tap came back empty on this run',
+      diag,
+    );
+
+    // The strongest check available: the string the SERVER returned for the
+    // framing verdict must equal the string the panel's own mirror computes.
+    const evaluateTap = result.taps.find((t) => /CinematographerEvaluate/.test(t.head));
+    ok(
+      evaluateTap?.text === result.panelSummary,
+      "the server's framing verdict is byte-identical to the panel's own mirror",
+      `${JSON.stringify(evaluateTap?.text)} vs ${JSON.stringify(result.panelSummary)}`,
+    );
+    ok(
+      /^(\d+) of \1 comparable strings are identical/.test(result.reconcile),
+      'the reconcile card reports every comparable string as identical',
+      result.reconcile.slice(0, 90),
+    );
+    ok(
+      result.errors === '',
+      'no execution errors were returned',
+      result.errors.slice(0, 90),
+    );
+    ok(
+      /Last run: prompt .+ status_str "success"/.test(result.footer),
+      'the footer records the real run instead of claiming no render is wired',
+      result.footer.slice(0, 110),
+    );
+
+    await evaluate(`document.querySelector('#tabnav [data-tab="run"]').click(), true`);
+    await sleep(250);
+    const runShot = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: true,
+    });
+    const runFile = SHOT.replace(/\.png$/, '-run.png');
+    writeFileSync(runFile, Buffer.from(runShot.data, 'base64'));
+    ok(existsSync(runFile), 'run tab screenshot written', runFile);
+  }
+
+  console.log('\n[R4] Run tab — a node ComfyUI drops at validation is surfaced, not hidden');
+  if (!serverUp) {
+    ok(
+      true,
+      `silent-drop check skipped — ${serverWhy}`,
+      'this path needs a live server to reject the node',
+    );
+  } else {
+    // Force a value the node's COMBO cannot accept. `engineEmotion` passes an
+    // unrecognised slug through unchanged on purpose — the server, not the
+    // panel, should be the one to reject it. ComfyUI answers 200 with a
+    // `prompt_id` anyway and drops the node plus everything downstream of it,
+    // naming them only in `node_errors`. The panel must not call that a clean
+    // run.
+    const injected = await evaluate(`(() => {
+      const DP = window.__cinematographer.directorPanel;
+      const before = (DP.directorState.emotions ?? []).map((e) => ({ ...e }));
+      DP.directorState.emotions = [{ element: 'tamsincamp', emotion: 'ennui', intensity: 1 }];
+      const RP = window.__cinematographer.runPanel;
+      const CC = window.__cinematographer.comfyClient;
+      const graph = CC.buildGraph(RP.collect()).graph;
+      return { before, sent: graph['1'].inputs.emotion };
+    })()`);
+    ok(
+      injected.sent === 'ennui',
+      'an unrecognised emotion is passed through for the server to reject, not silently dropped',
+      JSON.stringify(injected.sent),
+    );
+
+    await evaluate(`document.getElementById('r-build').click(), true`);
+    await sleep(200);
+    await evaluate(`document.getElementById('r-run').click(), true`);
+    await waitFor(
+      `(() => {
+        const t = document.getElementById('r-run-status').textContent;
+        return /taps returned output in this record|it failed|Nothing was sent|does not know|threw/.test(t);
+      })()`,
+      'the panel to settle on the partial run',
+      120000,
+    );
+
+    const dropped = await evaluate(`(() => ({
+      status: document.getElementById('r-run-status').textContent.trim(),
+      errors: document.getElementById('r-errors').textContent.trim(),
+      ran: document.getElementById('r-ran').textContent.trim(),
+      nodeErrors: Object.keys(window.__cinematographer.runPanel.lastNodeErrors() ?? {}),
+    }))()`);
+    ok(
+      /were rejected at validation and never ran/.test(dropped.status),
+      'the panel says the prompt was accepted but nodes were rejected',
+      dropped.status.slice(0, 130),
+    );
+    ok(
+      /partial run, not a clean one/.test(dropped.status),
+      'the panel refuses to call a partial run clean',
+      dropped.status.slice(-100),
+    );
+    ok(
+      /^3 \/ 7 taps returned output in this record/.test(dropped.ran),
+      'the tap count reflects the nodes ComfyUI dropped, not the graph that was sent',
+      dropped.ran,
+    );
+    ok(
+      dropped.nodeErrors.length > 0,
+      'the panel kept the server\'s node_errors rather than discarding them',
+      JSON.stringify(dropped.nodeErrors),
+    );
+    ok(
+      /CinemaDirectorPanel|emotion/i.test(dropped.errors),
+      "the engine's own reason is on screen, verbatim",
+      dropped.errors.slice(0, 130),
+    );
+
+    // Put the Director tab back the way it was.
+    await evaluate(`(() => {
+      const DP = window.__cinematographer.directorPanel;
+      DP.directorState.emotions = ${JSON.stringify(injected.before)};
+      document.getElementById('r-build').click();
+      return true;
+    })()`);
+    await sleep(200);
+    const restored = await evaluate(
+      `window.__cinematographer.comfyClient.buildGraph(
+         window.__cinematographer.runPanel.collect()).graph['1'].inputs.emotion`,
+    );
+    ok(
+      restored !== 'ennui',
+      'the Director tab was restored after the check',
+      JSON.stringify(restored),
+    );
+  }
 
   console.log('\n[6] screenshot');
   const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
