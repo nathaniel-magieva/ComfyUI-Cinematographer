@@ -473,3 +473,69 @@ def test_shipped_full_flow_graph_executes_until_it_needs_weights(comfy):
             "VAELoader", "UNETLoader", "CLIPLoader", "DualCLIPLoader",
             "LatentUpscaleModelLoader",
         }, f"stopped at {first.get('node_type')}, which is not a model loader"
+
+
+def test_the_pixel_node_grades_a_real_tensor_through_the_engine(comfy):
+    """``CinemaGradeApply`` is the only node in the pack that touches pixels.
+
+    Every other test in this file moves strings and booleans. Until this one,
+    ``CinemaGradeApply`` had never been executed through ComfyUI's engine at
+    all -- it was only ever called directly as Python, in
+    ``tests/test_nodes_grade_apply.py``. That leaves the one path a user
+    actually sees unproven: a real tensor in, a real tensor out, through the
+    same machinery that runs it in the app.
+
+    ``EmptyImage`` is the source because it needs no weights. That is the whole
+    reason this test can exist: every shipped graph stops at a model loader on
+    a machine with no checkpoints, so a weight-free source is the only way to
+    reach the pixel path here. It is also why this test does not live in
+    ``test_nodes_grade_apply.py`` -- that file needs numpy at module scope and
+    collects zero tests without it, whereas this file must stay importable
+    under the stdlib interpreter.
+    """
+    pytest.importorskip("numpy")
+
+    def build(g, M):
+        blank = g.node("EmptyImage", width=64, height=64, batch_size=1, color=0x336699)
+        grade = g.node(
+            "CinemaGrade",
+            temperature=0.5,
+            contrast=0.5,
+            saturation=0.5,
+            sharpness=0.0,
+            film_grain=0.0,
+            highlights=0.0,
+            exposure=0.5,
+        )
+        g.node(
+            "CinemaGradeApply",
+            image=blank.out(0),
+            grade_json=grade.out(0),
+            seed=42,
+        )
+
+    prompt, ex = _run(comfy, build)
+    assert ex.success, _errors(ex)
+
+    source = _outputs(ex, prompt, _first_node_of(prompt, "EmptyImage"))[0][0]
+    graded = _outputs(ex, prompt, _first_node_of(prompt, "CinemaGradeApply"))
+    image, summary = graded[0][0], graded[1][0]
+
+    # A real tensor came out, the same shape as the one that went in.
+    assert image.shape == source.shape == (1, 64, 64, 3), (
+        f"expected (1, 64, 64, 3), got {tuple(image.shape)}"
+    )
+    assert image.dtype == source.dtype
+
+    # The grade actually changed pixels. A passthrough would satisfy every
+    # shape assertion above and still be broken, so this is the assertion that
+    # makes the test worth having.
+    assert not image.equal(source), "the grade was a no-op on the pixels"
+
+    # And it stayed in range. A grade that clips to black or white is a bug the
+    # shape check cannot see either.
+    assert float(image.min()) >= 0.0, f"pixel below 0: {float(image.min())}"
+    assert float(image.max()) <= 1.0, f"pixel above 1: {float(image.max())}"
+
+    assert summary, "the apply node returned no summary"
+    assert isinstance(summary, str)

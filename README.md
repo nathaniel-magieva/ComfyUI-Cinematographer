@@ -54,26 +54,26 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 837 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 918 tests, all hand-computed expected values
 ```
 
 One test module needs numpy, because one node does. It is imported lazily inside
 that node, so the pack still imports without numpy and only `CinemaGradeApply`
 fails at execution time. The test module matches that tolerance with
 `pytest.importorskip`, so on a stdlib-only interpreter you get
-**816 passed, 22 skipped** rather than a collection error that hides the other 800.
+**816 passed, 23 skipped** rather than a collection error that hides the other 800.
 
-**Name the interpreter when you quote a total.** 837, 896 and 816 are the same tree:
+**Name the interpreter when you quote a total.** 918, 896 and 816 are the same tree:
 the 80-test difference between 816 and 896 is exactly `tests/test_nodes_grade_apply.py`,
-which is numpy-gated, and the remaining 21 are the ComfyUI-, server- and proxy-gated
+which is numpy-gated, and the remaining 22 are the ComfyUI-, server- and proxy-gated
 modules. The skip is loud and carries its reason, not a silent zero.
 
 | Interpreter | Result | Why |
 |---|---|---|
-| stdlib only | **816 passed, 22 skipped** | no numpy, so the 80 grade-apply tests skip whole; plus the 21 gated below |
-| with numpy | **896 passed, 21 skipped** | the grade-apply tests run; the 21 gated ones still skip |
+| stdlib only | **816 passed, 23 skipped** | no numpy, so the 80 grade-apply tests skip whole; plus the 22 gated below |
+| with numpy | **896 passed, 22 skipped** | the grade-apply tests run; the 22 gated ones still skip |
 
-**Eight of those tests drive ComfyUI's real execution engine.** They are gated on
+**Nine of those tests drive ComfyUI's real execution engine.** They are gated on
 `COMFYUI_PATH` and skip with a specific reason when it is unset, when the path is not a
 ComfyUI checkout, or when `torch` is missing — so a green run is never mistaken for
 "the pack was executed". To run them:
@@ -86,6 +86,16 @@ They boot ComfyUI's own loader, build a graph with `GraphBuilder`, run it throug
 `execution.PromptExecutor`, and read the values back out of the executor cache. That is
 the only test here that would catch a node whose declared inputs and callable signature
 disagree, or a JUDGE→POST edge that is wired but carries nothing.
+
+One of the nine is different in kind: it drives `CinemaGradeApply` — the only node in the
+pack that touches pixels — with a real tensor, through the engine, and asserts the output
+is *not* equal to the input. Every other test in this file moves strings and booleans, so
+without it the one path a user actually sees was unproven. Its image source is
+`EmptyImage`, which needs no weights: every shipped graph stops at a model loader on a
+machine with no checkpoints, so a weight-free source is the only way to reach the pixel
+path headlessly. It lives here rather than in `test_nodes_grade_apply.py` because that
+module needs numpy at import time and collects zero tests without it, whereas this file
+must stay importable under the stdlib interpreter.
 
 **Eight more drive a live ComfyUI server over HTTP** — the way a user actually runs the
 pack. They are gated on `COMFYUI_URL`:

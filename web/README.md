@@ -321,15 +321,16 @@ Three checks, all re-runnable. Nothing below is claimed without having been run.
 | Headless panel logic | `node web/tools/smoke_test.mjs` | `PASS — 63/63 checks passed` (exit 0) |
 | Real browser pass | `node web/tools/browser_check.mjs http://127.0.0.1:8765/` | `PASS — 181/181 browser checks passed` (exit 0) |
 | The Studio tab, end to end | `node web/tools/studio_check.mjs http://127.0.0.1:8765/` | `PASS — 49/49 checks` (exit 0) |
-| Python engine | `/tmp/cine-venv/bin/python -m pytest tests/ -q` | `816 passed, 22 skipped` |
+| Python engine | `/tmp/cine-venv/bin/python -m pytest tests/ -q` | `816 passed, 23 skipped` |
 
 The smoke test drives the *real* panel pipeline (`panel_state.js` → `cinematographer.js`, and
 `director.js` directly), not a copy. It also asserts that every DOM id `app.js` **and**
 `director_panel.js` query exists in `index.html`, that the credit model reproduces all nine published
 cells, and that `@`/`#` parsing resolves and flags correctly.
 
-The browser check drives headless Chrome over the DevTools Protocol. On the Director tab it asserts
-the tab is the default, that all 13 dropdowns match the engine enums exactly, that the move stack
+The browser check drives headless Chrome over the DevTools Protocol. It asserts the Studio tab is the
+default — visible on load, selected, and first in the tab bar — then reveals the Director tab
+explicitly and asserts that all 13 dropdowns match the engine enums exactly, that the move stack
 reorders and the composed prompt follows that order, that `@`/`#` tags resolve and unresolved ones
 flag red, that the cost readout follows duration and resolution, and that focal length lands in the
 engine-extension block and never in the API parameter block. It then switches to the Judge tab and
