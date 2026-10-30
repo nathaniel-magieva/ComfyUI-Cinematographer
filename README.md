@@ -54,19 +54,24 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 907 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 912 tests, all hand-computed expected values
 ```
 
 One test module needs numpy, because one node does. It is imported lazily inside
 that node, so the pack still imports without numpy and only `CinemaGradeApply`
 fails at execution time. The test module matches that tolerance with
 `pytest.importorskip`, so on a stdlib-only interpreter you get
-**811 passed, 17 skipped** rather than a collection error that hides the other 800.
+**811 passed, 22 skipped** rather than a collection error that hides the other 800.
 
-**Name the interpreter when you quote a total.** 907, 891 and 811 are the same tree:
+**Name the interpreter when you quote a total.** 912, 891 and 811 are the same tree:
 the 80-test difference between 811 and 891 is exactly `tests/test_nodes_grade_apply.py`,
-which is numpy-gated, and the remaining 16 are the ComfyUI- and server-gated modules.
-The skip is loud and carries its reason, not a silent zero.
+which is numpy-gated, and the remaining 21 are the ComfyUI-, server- and proxy-gated
+modules. The skip is loud and carries its reason, not a silent zero.
+
+| Interpreter | Result | Why |
+|---|---|---|
+| stdlib only | **811 passed, 22 skipped** | no numpy, so the 80 grade-apply tests skip whole; plus the 21 gated below |
+| with numpy | **891 passed, 21 skipped** | the grade-apply tests run; the 21 gated ones still skip |
 
 **Eight of those tests drive ComfyUI's real execution engine.** They are gated on
 `COMFYUI_PATH` and skip with a specific reason when it is unset, when the path is not a
@@ -82,7 +87,7 @@ They boot ComfyUI's own loader, build a graph with `GraphBuilder`, run it throug
 the only test here that would catch a node whose declared inputs and callable signature
 disagree, or a JUDGE→POST edge that is wired but carries nothing.
 
-**Six more drive a live ComfyUI server over HTTP** — the way a user actually runs the
+**Eight more drive a live ComfyUI server over HTTP** — the way a user actually runs the
 pack. They are gated on `COMFYUI_URL`:
 
 ```bash
@@ -110,6 +115,52 @@ error that names the pack rather than passing silently.
 > true of most packs; it is stated here because it is the first thing that will bite
 > someone who wires up our nodes and hits Queue Prompt.
 
+**Five more drive the pack through the official Comfy API v2 proxy.** Comfy Org ships two
+MIT pieces that together let SDK code written for Comfy Cloud drive a *self-hosted*
+ComfyUI — `@comfyorg/sdk` (the client) and `comfy-api-proxy` (the server). The SDK's own
+source says the self-hosted path needs no key:
+
+```js
+// COMFY_BASE_URL=http://127.0.0.1:8189 in the environment targets a
+// self-hosted proxy instead, where no key is needed.
+```
+
+That claim is about *their* client talking to *a* ComfyUI. These tests check the part that
+matters to us: that the thing on the other end can be **this pack**. They are gated on
+`COMFYUI_URL` *and* `COMFY_PROXY_URL`:
+
+```bash
+# in one shell
+cd /path/to/ComfyUI && python main.py --cpu --port 8188
+# in another
+pip install comfy-api-proxy
+comfy-api-proxy --comfyui http://127.0.0.1:8188 --port 8189
+# in a third
+COMFYUI_URL=http://127.0.0.1:8188 COMFY_PROXY_URL=http://127.0.0.1:8189 \
+  python -m pytest tests/test_api_v2_proxy.py -q
+```
+
+Measured against ComfyUI 0.43.0 + `comfy-api-proxy` 0.1.6: **5 passed**. A graph of
+nothing but Cinematographer nodes (`CinemaDirectorPanel` → `CinemaPromptCompose` →
+`CinematographerEvaluate` → `CinematographerCorrection`, plus three `PreviewAny` taps) is
+submitted to `POST /api/v2/jobs`, and the values come back out of ComfyUI's own
+`/history` — the composed prompt, the `FAIL medium on 'Tamsin'` verdict, and the three
+correction levers. One test also asserts the proxy round-trips our graph **unchanged**,
+so nothing silently rewrites our inputs on the way through.
+
+> **Two traps, both found by running this.**
+>
+> **The proxy reports `status: "succeeded"` with `outputs: []` for a job whose nodes ran
+> perfectly.** `outputs` is built from ComfyUI's viewable artifacts (images, video), and
+> this pack returns plain `STRING`/`BOOLEAN`. Reading `outputs` alone says "nothing
+> happened", which is false — the values are in ComfyUI's `/history`. One test pins that
+> behaviour deliberately, so that if the proxy ever starts surfacing text outputs the
+> test fails loudly rather than leaving this paragraph stale.
+>
+> **The proxy's terminal success string is `succeeded`, not `success` or `completed`.**
+> A poll loop testing for ComfyUI's native vocabulary never terminates. The proxy is a
+> different surface with its own status words.
+
 The engine imports with **zero ComfyUI dependency** — that is a deliberate design constraint, so
 the geometry is testable and reusable outside ComfyUI.
 
@@ -117,34 +168,86 @@ the geometry is testable and reusable outside ComfyUI.
 
 ## The nodes
 
+**18 nodes, in five groups.** The first six are the judgement engine; the rest carry the
+five stages of the flow around it.
+
+**Judge — the framing arithmetic**
+
 | Node | What it does |
 |---|---|
 | `CinematographerEvaluate` | Scores a camera + subject against the 9 per-shot rules. Returns a report, an overall pass, and a one-line summary. |
 | `CinematographerAutoFrame` | Solves a camera pose for a shot type and intent. **Reports whether it actually converged.** |
+| `CinematographerCorrection` | Turns a report into a plain list of correction levers. **This is the JUDGE→POST gate.** |
 | `ChorosContinuity` | Checks a shot list for 180°-axis breaks and sub-30° jump cuts. |
 | `SceneFramingExtras` | The multi-entity rules: size = story importance, dirty-frame foreground, eyeline. |
 | `CameraReliabilityZone` | Grades a requested angle against the view-steering model's trained envelope. |
-| `CinematographerCorrection` | Turns a report into a plain list of correction levers. |
+
+**Stage 1 BUILD / 2 ATTACH — Elements**
+
+| Node | What it does |
+|---|---|
+| `CinemaElementSave` | Register an asset as a named, categorised, reusable Element. **The pack's only `OUTPUT_NODE`.** |
+| `CinemaElementLoad` | Resolve an Element by name back to its record. |
+| `CinemaElementList` | Enumerate the project's Elements, so a graph can be built against a registry. |
+| `CharacterContinuity` | Identity continuity: did the character's appearance survive the cut? |
+
+**Stage 3 DIRECT**
+
+| Node | What it does |
+|---|---|
+| `CinemaDirectorPanel` | The director's panel: five groups, each on `auto` or set. |
+| `CinemaEmotionWheel` | One character's emotion and intensity, as a direction. |
+
+**Stage 4 SHOOT**
+
+| Node | What it does |
+|---|---|
+| `CinemaPromptCompose` | Assemble the prompt from the action, panel, Elements and moves. Resolves `@` and `#` tags. |
+| `CinemaCameraMove` | Resolve the `#move` tags in a prompt against the engine's move list. A **parallel** resolver, not a filter. |
+
+**Stage 5 POST**
+
+| Node | What it does |
+|---|---|
+| `CinemaGrade` | Describe a colour grade as a plan of per-parameter deltas. |
+| `CinemaGradeApply` | Apply a grade plan to an image. The one POST node that touches pixels. |
+| `CinemaExtend` | Plan a Sequel or Prequel continuation of a shot. |
+| `CinemaEdit` | Plan a regional edit: a labelled NDC box plus the instruction. |
 
 All JSON in, all JSON out — the nodes compose with anything.
 
+> **`CinemaCameraMove.moves` is JSON; `CinemaPromptCompose.moves` wants comma- or
+> newline-separated names.** Linking them is type-legal (`STRING` to `STRING`) and
+> semantically wrong, so the shipped graph does **not** link them. `CinemaPromptCompose`
+> resolves `@`/`#` itself from `action`; `CinemaCameraMove` is a parallel resolver that
+> reports what it found. Both read the same text, and every output of both is exposed on a
+> `PreviewAny`, so a disagreement is visible rather than inferred.
+
 ---
 
-## The rules — 14, honestly counted
+## The rules — 9 per frame, 14 in total, honestly counted
 
-The reference engine documents 38 cinematography rules. **Only 14 are machine-evaluated.** We
-port the 14 and say so, because a rule you cannot measure is a rule you cannot enforce.
+The reference engine documents 38 cinematography rules. **Only 14 are machine-evaluated, and
+only 9 of those are per-frame.** We port the 14 and say so, because a rule you cannot measure
+is a rule you cannot enforce.
 
-**Per shot (9):** `in_frame` · `rule_of_thirds` · `headroom` · `shot_size` · `lead_room` ·
+**Per frame (9):** `in_frame` · `rule_of_thirds` · `headroom` · `shot_size` · `lead_room` ·
 `negative_space` · `camera_angle` · `level` · `direct_address`
 
 **Per scene (3):** `size_importance` · `foreground_occlusion` · `eyeline`
 
 **Across cuts (2):** `180_axis` · `30_degree`
 
-Four of these are *informational* — they describe the frame's register (isolated, heroic,
-down-the-lens) rather than judging it. The other ten carry weights, and a frame passes only when
-every rule at weight ≥ 0.8 passes.
+Three of the nine per-frame rules are *informational* — they describe the frame's register
+(isolated, heroic, down-the-lens) rather than judging it. The other six per-frame rules carry
+weights, as do the 3 scene rules and the 2 continuity rules; a frame passes only when every
+rule at weight ≥ 0.8 passes.
+
+> **Say "9" for per-frame.** 14 is a legitimate total *across three families*, but it is wrong
+> as a per-frame count — the 3 scene rules and the 2 continuity rules are not evaluated on a
+> single frame. When the fuller picture is needed, state the parts separately: "9 framing rules
+> per frame, plus 2 sequence-level continuity rules and 3 multi-entity scene rules." Never fold
+> them into a single "14" as if per-frame, and never claim 38.
 
 ---
 
