@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cinematographer — Director's Panel</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <img class="brand-logo" src="./magieva-logo.png" alt="Magieva" />
+    <span class="brand-mark">◎</span>
+    <div>
+      <h1>Cinematographer <span class="dim">— Director's Panel</span></h1>
+      <p class="tagline">
+        Move the camera. Watch the arithmetic change. Every number below is computed by the
+        same geometry as the Python engine — <code>parity_check.py</code> proves it.
+      </p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div id="overall-badge" class="badge badge-fail" title="every rule with weight ≥ 0.8 must pass">
+      <span class="badge-label">OVERALL</span>
+      <span class="badge-value" id="overall-value">—</span>
+    </div>
+    <div id="reliability-badge" class="badge badge-zone-green" title="view-steering training envelope">
+      <span class="badge-label">RELIABILITY</span>
+      <span class="badge-value" id="reliability-value">—</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ================= LEFT: viewport, frame preview, controls ============ -->
+  <section class="col-left">
+
+    <div class="card viewport-card">
+      <div class="card-head">
+        <h2>3D viewport</h2>
+        <span class="hint" id="three-status">loading three.js…</span>
+      </div>
+      <div id="viewport" class="viewport">
+        <canvas id="gl"></canvas>
+        <div class="viewport-overlay">
+          <span class="chip" id="chip-eye">eye —</span>
+          <span class="chip" id="chip-target">target —</span>
+          <span class="chip" id="chip-fov">vFOV —</span>
+        </div>
+      </div>
+      <p class="card-foot">
+        Drag to orbit the <em>viewer</em>, wheel to zoom. The frustum is the shot camera; the
+        green line is the subject's action line (the 180° axis).
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Frame preview</h2>
+        <span class="hint">NDC, frame edges at ±1 · y is up</span>
+      </div>
+      <canvas id="frame" width="720" height="405" class="frame-canvas"></canvas>
+      <p class="card-foot">
+        The vertical bar is the subject from feet to top; the dot is the <strong>eye anchor</strong>
+        at 0.92 × height. The shaded band is the headroom band for the selected shot type.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Camera &amp; intent</h2>
+        <button id="reset" class="btn btn-ghost" type="button">Reset</button>
+      </div>
+
+      <div class="control-grid">
+        <div class="control">
+          <label>Shot type</label>
+          <div class="segmented" id="seg-shot">
+            <button data-value="closeup" type="button">closeup</button>
+            <button data-value="medium" type="button" class="on">medium</button>
+            <button data-value="wide" type="button">wide</button>
+          </div>
+        </div>
+
+        <div class="control">
+          <label>Composition intent</label>
+          <div class="segmented" id="seg-comp">
+            <button data-value="centered" type="button">centered</button>
+            <button data-value="thirds-left" type="button" class="on">thirds-left</button>
+            <button data-value="thirds-right" type="button">thirds-right</button>
+          </div>
+        </div>
+
+        <div class="control">
+          <label>Angle intent</label>
+          <div class="segmented" id="seg-angle">
+            <button data-value="low" type="button">low</button>
+            <button data-value="eye" type="button" class="on">eye</button>
+            <button data-value="high" type="button">high</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-grid sliders">
+        <div class="control">
+          <label for="in-az">Orbit azimuth <output id="out-az"></output></label>
+          <input id="in-az" type="range" min="-180" max="180" step="1" value="12" />
+        </div>
+        <div class="control">
+          <label for="in-dist">Distance <output id="out-dist"></output></label>
+          <input id="in-dist" type="range" min="0.5" max="15" step="0.05" value="3.2" />
+        </div>
+        <div class="control">
+          <label for="in-height">Camera height <output id="out-height"></output></label>
+          <input id="in-height" type="range" min="0.2" max="5" step="0.01" value="1.61" />
+        </div>
+        <div class="control">
+          <label for="in-elev">Elevation <output id="out-elev"></output></label>
+          <input id="in-elev" type="range" min="-45" max="45" step="0.5" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-focal">Focal length <output id="out-focal"></output></label>
+          <input id="in-focal" type="range" min="14" max="135" step="1" value="35" />
+        </div>
+        <div class="control">
+          <label for="in-roll">Camera roll (Dutch) <output id="out-roll"></output></label>
+          <input id="in-roll" type="range" min="-20" max="20" step="0.5" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-dutch">Intended Dutch <output id="out-dutch"></output></label>
+          <input id="in-dutch" type="range" min="-20" max="20" step="0.5" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-aimx">Aim offset X <output id="out-aimx"></output></label>
+          <input id="in-aimx" type="range" min="-2" max="2" step="0.01" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-aimy">Aim offset Y <output id="out-aimy"></output></label>
+          <input id="in-aimy" type="range" min="-2" max="2" step="0.01" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-yaw">Subject facing yaw <output id="out-yaw"></output></label>
+          <input id="in-yaw" type="range" min="-180" max="180" step="1" value="0" />
+        </div>
+        <div class="control">
+          <label for="in-sheight">Subject height <output id="out-sheight"></output></label>
+          <input id="in-sheight" type="range" min="1.2" max="2.1" step="0.01" value="1.75" />
+        </div>
+      </div>
+      <p class="card-foot" id="lens-note"></p>
+    </div>
+  </section>
+
+  <!-- ================= RIGHT: rules, solver, continuity ================== -->
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Auto-Frame</h2>
+        <span class="hint">24-iteration geometric solver · no AI cost</span>
+      </div>
+      <div class="autoframe-row">
+        <button id="autoframe" class="btn btn-primary" type="button">Auto-Frame</button>
+        <div id="solver-badge" class="badge badge-muted">
+          <span class="badge-label">SOLVER</span>
+          <span class="badge-value">idle</span>
+        </div>
+      </div>
+      <p class="card-foot" id="solver-note">
+        Solves a pose that satisfies the weighted rules, then reports honestly whether it
+        converged — the original returned its 24th iterate unconditionally.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Rule panel</h2>
+        <span class="hint">9 rules · weight ≥ 0.8 must pass</span>
+      </div>
+      <div id="rules" class="rules"></div>
+      <p class="card-foot" id="overall-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Reliability zone</h2>
+        <span class="hint">CrossView-Warp training envelope</span>
+      </div>
+      <div class="zone-row">
+        <div id="zone-swatch" class="zone-swatch zone-green">green</div>
+        <p id="zone-reason" class="zone-reason">—</p>
+      </div>
+      <p class="card-foot">
+        Green: |azimuth| ≤ 45° and |elevation| ≤ 30°. Yellow: 45° &lt; |azimuth| ≤ 60° at level
+        elevation. Red: beyond that — the hidden side will be invented.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Continuity strip</h2>
+        <button id="check-continuity" class="btn btn-ghost" type="button">Check continuity</button>
+      </div>
+      <div id="shots" class="shots"></div>
+      <div id="continuity-out" class="continuity-out"></div>
+      <p class="card-foot">
+        Choros compares <em>consecutive</em> shots: the 180° axis rule and the 30° rule. Shot 1
+        follows the panel camera; shots 2 and 3 have their own bearing.
+      </p>
+    </div>
+
+    <details class="card json-card">
+      <summary>Node I/O — the exact JSON this panel computes</summary>
+      <h3>camera_json</h3>
+      <pre id="json-camera"></pre>
+      <h3>report_json</h3>
+      <pre id="json-report"></pre>
+    </details>
+  </section>
+</main>
+
+<footer class="footer">
+  <span id="provenance">geometry: web/cinematographer.js ↔ cinematographer/ (Python)</span>
+  <span class="dim">No render is wired to a live ComfyUI in this panel — see README.md.</span>
+</footer>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
