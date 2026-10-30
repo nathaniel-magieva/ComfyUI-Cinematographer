@@ -1,0 +1,2554 @@
+{
+  "meta": {
+    "generated_by": "web/tools/gen_fixtures.py",
+    "generated_at": "2026-10-30T02:24:43+00:00",
+    "engine": "cinematographer/ (Python)",
+    "engine_revision": "unknown",
+    "engine_hash_sha256": "d93581b30ce0a7c1e4ce499d18937d1d74e58717afcc28a6cddea5ce66add532",
+    "engine_hash_modules": [
+      "geometry.py",
+      "framing.py",
+      "scene.py",
+      "continuity.py",
+      "autoframe.py",
+      "reliability.py"
+    ],
+    "engine_hash_modules_present": [
+      "geometry.py",
+      "framing.py",
+      "scene.py",
+      "continuity.py",
+      "autoframe.py",
+      "reliability.py"
+    ],
+    "note": "Expected values are computed by the Python engine, not hand-written. The two 'go-test-*' fixtures are additionally cross-checked against the reference engine's own test output. engine_hash_sha256 covers the six engine modules; parity_check.py recomputes it and fails when the fixtures are stale."
+  },
+  "framing": [
+    {
+      "id": "go-test-centered-closeup",
+      "description": "The reference engine's own test pose 'camCentered'. Centred framing must FAIL rule_of_thirds. Cross-checked against the reference framing-scorer test.",
+      "subject": {
+        "name": "Maya",
+        "base": [
+          0,
+          0,
+          3
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 180
+      },
+      "camera": {
+        "eye": [
+          0,
+          1.5,
+          1.7
+        ],
+        "target": [
+          0,
+          1.3,
+          3
+        ],
+        "focal_mm": 42,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Maya",
+        "shot_type": "closeup",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 1.0,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": -0.307,
+            "target": "top gap in [0.05, 0.30]",
+            "weight": 1.0,
+            "correction": "too tight / clipped top: lower the camera target or pull back"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 2.415,
+            "target": "subject \u226570% of frame height (CU)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": -0.064,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 2.818,
+            "target": "direct address (down the lens)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "go-test-offset-closeup",
+      "description": "The reference engine's own test pose 'camOffset'. Off-centre framing must PASS rule_of_thirds. Cross-checked against the reference framing-scorer test.",
+      "subject": {
+        "name": "Maya",
+        "base": [
+          0,
+          0,
+          3
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 180
+      },
+      "camera": {
+        "eye": [
+          0.65,
+          1.52,
+          1.75
+        ],
+        "target": [
+          -0.2,
+          1.5,
+          3
+        ],
+        "focal_mm": 40,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Maya",
+        "shot_type": "closeup",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": true,
+            "value": -0.263,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 1.0
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.439,
+            "target": "top gap in [0.05, 0.30]",
+            "weight": 1.0,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 2.37,
+            "target": "subject \u226570% of frame height (CU)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.263,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": -0.044,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 27.528,
+            "target": "off-lens (observational)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "medium-thirds-left",
+      "description": "Medium shot, camera in front of the subject, intent puts the subject on the left third.",
+      "subject": {
+        "name": "Ava",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.55,
+          1.61,
+          3.2
+        ],
+        "target": [
+          0.0,
+          1.61,
+          0.0
+        ],
+        "focal_mm": 35,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Ava",
+        "shot_type": "medium",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.8,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.851,
+            "target": "top gap in [0.10, 0.45]",
+            "weight": 0.7,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": false,
+            "value": 0.932,
+            "target": "subject 40\u201375% of frame height (MS)",
+            "weight": 1.0,
+            "correction": "dolly/zoom to hit medium (subject fills 93% of height)"
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.624,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.0,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 9.752,
+            "target": "near-lens (engaged)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "wide-high-angle",
+      "description": "Wide shot from above the eye-line: camera_angle reads high, shot_size must sit in the wide band.",
+      "subject": {
+        "name": "Ben",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.8,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          1.4,
+          3.4,
+          5.6
+        ],
+        "target": [
+          0.0,
+          1.66,
+          0.0
+        ],
+        "focal_mm": 24,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "wide",
+      "intent": {
+        "angle": "high",
+        "side": "right",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Ben",
+        "shot_type": "wide",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.6,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.947,
+            "target": "top gap in [0.20, 0.70]",
+            "weight": 0.4,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 0.316,
+            "target": "subject 15\u201345% of frame height (WS)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.3
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.946,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.4
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 1.744,
+            "target": "high (vulnerable)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 21.77,
+            "target": "near-lens (engaged)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": true
+      }
+    },
+    {
+      "id": "closeup-dutch-intended",
+      "description": "Dutch roll 8 deg with intent.dutch_deg=8: the level rule must PASS.",
+      "subject": {
+        "name": "Cleo",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.68,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.3,
+          1.55,
+          1.5
+        ],
+        "target": [
+          0.0,
+          1.55,
+          0.0
+        ],
+        "focal_mm": 50,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 8.0,
+        "fov": 0.0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 8.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Cleo",
+        "shot_type": "closeup",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": -0.001,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 1.0,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=-0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.584,
+            "target": "top gap in [0.05, 0.30]",
+            "weight": 1.0,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 2.685,
+            "target": "subject \u226570% of frame height (CU)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": -0.001,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.004,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 8.0,
+            "target": "Dutch 8\u00b0 (unease intended)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 11.311,
+            "target": "near-lens (engaged)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "closeup-dutch-accidental",
+      "description": "Roll 5 deg with no intended Dutch: the level rule must FAIL with the roll lever.",
+      "subject": {
+        "name": "Cleo",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.68,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.3,
+          1.55,
+          1.5
+        ],
+        "target": [
+          0.0,
+          1.55,
+          0.0
+        ],
+        "focal_mm": 50,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 5.0,
+        "fov": 0.0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Cleo",
+        "shot_type": "closeup",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": -0.001,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 1.0,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=-0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.582,
+            "target": "top gap in [0.05, 0.30]",
+            "weight": 1.0,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 2.701,
+            "target": "subject \u226570% of frame height (CU)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": -0.001,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.004,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": false,
+            "value": 5.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5,
+            "correction": "match the intended camera roll"
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 11.311,
+            "target": "near-lens (engaged)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "medium-centered-intent",
+      "description": "intent.center=True takes the 'centered is correct' branch of rule_of_thirds.",
+      "subject": {
+        "name": "Dana",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.72,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.0,
+          1.58,
+          2.6
+        ],
+        "target": [
+          0.0,
+          1.58,
+          0.0
+        ],
+        "focal_mm": 35,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": true,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Dana",
+        "shot_type": "medium",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": true,
+            "value": 0.0,
+            "target": "centered (symmetry intended)",
+            "weight": 0.8
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.814,
+            "target": "top gap in [0.10, 0.45]",
+            "weight": 0.7,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": false,
+            "value": 1.143,
+            "target": "subject 40\u201375% of frame height (MS)",
+            "weight": 1.0,
+            "correction": "dolly/zoom to hit medium (subject fills 114% of height)"
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.446,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": -0.002,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 0.053,
+            "target": "direct address (down the lens)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "wide-lead-room-fail",
+      "description": "Subject facing screen-right but sitting on the right: lead_room must FAIL (negative).",
+      "subject": {
+        "name": "Eli",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.78,
+        "facing_yaw_deg": 90
+      },
+      "camera": {
+        "eye": [
+          1.9,
+          1.64,
+          4.4
+        ],
+        "target": [
+          0.0,
+          1.64,
+          0.0
+        ],
+        "focal_mm": 28,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "wide",
+      "intent": {
+        "angle": "eye",
+        "side": "right",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Eli",
+        "shot_type": "wide",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.6,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=-0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.919,
+            "target": "top gap in [0.20, 0.70]",
+            "weight": 0.4,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": false,
+            "value": 0.514,
+            "target": "subject 15\u201345% of frame height (WS)",
+            "weight": 1.0,
+            "correction": "dolly/zoom to hit wide (subject fills 51% of height)"
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.3
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.874,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.4
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.002,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 66.644,
+            "target": "off-lens (observational)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "behind-camera-in-frame-fail",
+      "description": "The subject is behind the camera: in_frame must FAIL and every projection must return the behind-camera sentinel.",
+      "subject": {
+        "name": "Fay",
+        "base": [
+          0,
+          0,
+          -4
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0,
+          1.56,
+          0
+        ],
+        "target": [
+          0,
+          1.56,
+          1
+        ],
+        "focal_mm": 35,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Fay",
+        "shot_type": "medium",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": false,
+            "value": 0.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1,
+            "correction": "re-aim/pull back: subject's face is off-frame or behind camera"
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.8,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 1.0,
+            "target": "top gap in [0.10, 0.45]",
+            "weight": 0.7,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": false,
+            "value": 0.0,
+            "target": "subject 40\u201375% of frame height (MS)",
+            "weight": 1.0,
+            "correction": "dolly/zoom to hit medium (subject fills 0% of height)"
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 1.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": -0.004,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 0.057,
+            "target": "direct address (down the lens)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "medium-solver-fov",
+      "description": "A solver-shaped pose: fov=40 overrides focal/sensor (the Auto-Frame lens path).",
+      "subject": {
+        "name": "Gus",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.0,
+          1.61,
+          2.4
+        ],
+        "target": [
+          0.0,
+          1.61,
+          0.0
+        ],
+        "focal_mm": 0.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 40.0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Gus",
+        "shot_type": "medium",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.8,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.84,
+            "target": "top gap in [0.10, 0.45]",
+            "weight": 0.7,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": false,
+            "value": 1.002,
+            "target": "subject 40\u201375% of frame height (MS)",
+            "weight": 1.0,
+            "correction": "dolly/zoom to hit medium (subject fills 100% of height)"
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.569,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.0,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 0.0,
+            "target": "direct address (down the lens)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "closeup-low-angle",
+      "description": "Camera below the eye-line with an upward pitch: camera_angle reads low (power/heroic).",
+      "subject": {
+        "name": "Hana",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.65,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.25,
+          0.9,
+          1.4
+        ],
+        "target": [
+          0.0,
+          1.52,
+          0.0
+        ],
+        "focal_mm": 40,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "low",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Hana",
+        "shot_type": "closeup",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 1.0,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.706,
+            "target": "top gap in [0.05, 0.30]",
+            "weight": 1.0,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 3.062,
+            "target": "subject \u226570% of frame height (CU)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.4
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.0,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.3
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": -0.618,
+            "target": "low (power/heroic)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 25.463,
+            "target": "off-lens (observational)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": false
+      }
+    },
+    {
+      "id": "wide-far-subject-small",
+      "description": "A very wide framing where shot_size falls below the wide band and headroom is large.",
+      "subject": {
+        "name": "Ivo",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.8,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.0,
+          1.66,
+          14.0
+        ],
+        "target": [
+          0.0,
+          1.66,
+          0.0
+        ],
+        "focal_mm": 35,
+        "sensor_mm": 36,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "shot_type": "wide",
+      "intent": {
+        "angle": "eye",
+        "side": "right",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "subject": "Ivo",
+        "shot_type": "wide",
+        "scores": [
+          {
+            "rule": "in_frame",
+            "pass": true,
+            "value": 1.0,
+            "target": "subject's face within frame & in front",
+            "weight": 1
+          },
+          {
+            "rule": "rule_of_thirds",
+            "pass": false,
+            "value": 0.0,
+            "target": "eyes near x=\u00b10.33 (not centered)",
+            "weight": 0.6,
+            "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+          },
+          {
+            "rule": "headroom",
+            "pass": false,
+            "value": 0.965,
+            "target": "top gap in [0.20, 0.70]",
+            "weight": 0.4,
+            "correction": "too much headroom: raise the camera target or push in"
+          },
+          {
+            "rule": "shot_size",
+            "pass": true,
+            "value": 0.222,
+            "target": "subject 15\u201345% of frame height (WS)",
+            "weight": 1.0
+          },
+          {
+            "rule": "lead_room",
+            "pass": true,
+            "value": 0.0,
+            "target": "gaze leads into frame",
+            "weight": 0.3
+          },
+          {
+            "rule": "negative_space",
+            "pass": true,
+            "value": 0.97,
+            "target": ">0.7 reads isolated; ~0.5 balanced",
+            "weight": 0.4
+          },
+          {
+            "rule": "camera_angle",
+            "pass": true,
+            "value": 0.004,
+            "target": "eye-level (neutral)",
+            "weight": 0.3
+          },
+          {
+            "rule": "level",
+            "pass": true,
+            "value": 0.0,
+            "target": "roll\u22480 (level)",
+            "weight": 0.5
+          },
+          {
+            "rule": "direct_address",
+            "pass": true,
+            "value": 0.016,
+            "target": "direct address (down the lens)",
+            "weight": 0.0
+          }
+        ],
+        "overall_pass": true
+      }
+    }
+  ],
+  "continuity": [
+    {
+      "id": "axis-cross-and-jump-cut",
+      "description": "Shot 1->2 keeps the side but changes the bearing by only 15 deg (30_degree FAIL); shot 2->3 crosses the action line (180_axis FAIL) while clearing 30 deg.",
+      "shots": [
+        {
+          "shot_number": 1,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              0.7764571353075622,
+              1.6,
+              2.897777478867205
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        },
+        {
+          "shot_number": 2,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              1.4999999999999998,
+              1.6,
+              2.598076211353316
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        },
+        {
+          "shot_number": 3,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              -1.2678547852220983,
+              1.6,
+              2.7189233611099497
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        }
+      ],
+      "expected": [
+        {
+          "rule": "180_axis",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": true,
+          "detail": "camera stays on one side of the action line"
+        },
+        {
+          "rule": "30_degree",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": false,
+          "detail": "camera angle changed 15 deg (need >=30 deg to avoid a jump cut)"
+        },
+        {
+          "rule": "180_axis",
+          "shot_a": 2,
+          "shot_b": 3,
+          "pass": false,
+          "detail": "axis crossed - the subject's screen direction flips between the cuts"
+        },
+        {
+          "rule": "30_degree",
+          "shot_a": 2,
+          "shot_b": 3,
+          "pass": true,
+          "detail": "camera angle changed 55 deg (need >=30 deg to avoid a jump cut)"
+        }
+      ]
+    },
+    {
+      "id": "clean-sequence",
+      "description": "Three shots on one side of the line, each 40 deg apart: both rules PASS.",
+      "shots": [
+        {
+          "shot_number": 1,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              0.520944533000791,
+              1.6,
+              2.954423259036624
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        },
+        {
+          "shot_number": 2,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              2.298133329356934,
+              1.6,
+              1.9283628290596182
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        },
+        {
+          "shot_number": 3,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              3.0,
+              1.6,
+              1.8369701987210297e-16
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        }
+      ],
+      "expected": [
+        {
+          "rule": "180_axis",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": true,
+          "detail": "camera stays on one side of the action line"
+        },
+        {
+          "rule": "30_degree",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": true,
+          "detail": "camera angle changed 40 deg (need >=30 deg to avoid a jump cut)"
+        },
+        {
+          "rule": "180_axis",
+          "shot_a": 2,
+          "shot_b": 3,
+          "pass": true,
+          "detail": "camera stays on one side of the action line"
+        },
+        {
+          "rule": "30_degree",
+          "shot_a": 2,
+          "shot_b": 3,
+          "pass": true,
+          "detail": "camera angle changed 40 deg (need >=30 deg to avoid a jump cut)"
+        }
+      ]
+    },
+    {
+      "id": "both-rules-fail",
+      "description": "A 5 deg bearing change that also flips sides: both rules FAIL on the same cut.",
+      "shots": [
+        {
+          "shot_number": 1,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              1.0260604299770062,
+              1.6,
+              2.8190778623577253
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        },
+        {
+          "shot_number": 2,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              -0.7764571353075622,
+              1.6,
+              2.897777478867205
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        }
+      ],
+      "expected": [
+        {
+          "rule": "180_axis",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": false,
+          "detail": "axis crossed - the subject's screen direction flips between the cuts"
+        },
+        {
+          "rule": "30_degree",
+          "shot_a": 1,
+          "shot_b": 2,
+          "pass": true,
+          "detail": "camera angle changed 35 deg (need >=30 deg to avoid a jump cut)"
+        }
+      ]
+    },
+    {
+      "id": "single-shot",
+      "description": "One shot only: no consecutive pair, so no issues at all.",
+      "shots": [
+        {
+          "shot_number": 1,
+          "base": [
+            0,
+            0,
+            0
+          ],
+          "yaw_deg": 0.0,
+          "camera": {
+            "eye": [
+              0.0,
+              1.6,
+              3.0
+            ],
+            "target": [
+              0,
+              1.6,
+              0
+            ],
+            "focal_mm": 35,
+            "sensor_mm": 36.0,
+            "aspect": 1.7777777777777777,
+            "roll_deg": 0.0,
+            "fov": 0.0
+          }
+        }
+      ],
+      "expected": []
+    }
+  ],
+  "reliability": [
+    {
+      "id": "green-front",
+      "description": "Camera straight in front, eye-level: green.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.0,
+          1.564,
+          3.0
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 0.0,
+      "elevation_deg": 0.0,
+      "expected": {
+        "zone": "green",
+        "reason": "inside the trained range (azimuth 0 deg <= 45 deg, elevation 0 deg <= 30 deg)",
+        "azimuth_deg": 0.0,
+        "elevation_deg": 0.0
+      }
+    },
+    {
+      "id": "green-boundary",
+      "description": "Exactly on both green boundaries (45 deg azimuth, 30 deg elevation): still green.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          2.1213,
+          2.864,
+          2.1213
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 45.0,
+      "elevation_deg": 30.0,
+      "expected": {
+        "zone": "green",
+        "reason": "inside the trained range (azimuth 45 deg <= 45 deg, elevation 30 deg <= 30 deg)",
+        "azimuth_deg": 45.0,
+        "elevation_deg": 30.0
+      }
+    },
+    {
+      "id": "yellow-azimuth",
+      "description": "50 deg azimuth, level: yellow, extrapolating on azimuth.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          2.2981,
+          1.564,
+          1.9284
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 50.0,
+      "elevation_deg": 0.0,
+      "expected": {
+        "zone": "yellow",
+        "reason": "extrapolating on azimuth (50 deg > 45 deg) - the model is guessing beyond its trained range",
+        "azimuth_deg": 50.0,
+        "elevation_deg": 0.0
+      }
+    },
+    {
+      "id": "yellow-azimuth-boundary",
+      "description": "Exactly 60 deg azimuth, level: the last yellow step before red.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          2.5981,
+          1.564,
+          1.5
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 60.0,
+      "elevation_deg": 0.0,
+      "expected": {
+        "zone": "yellow",
+        "reason": "extrapolating on azimuth (60 deg > 45 deg) - the model is guessing beyond its trained range",
+        "azimuth_deg": 60.0,
+        "elevation_deg": 0.0
+      }
+    },
+    {
+      "id": "red-azimuth",
+      "description": "70 deg azimuth: beyond the trained range, the hidden side will be invented.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          2.8191,
+          1.564,
+          1.0261
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 70.0,
+      "elevation_deg": 0.0,
+      "expected": {
+        "zone": "red",
+        "reason": "azimuth 70 deg is beyond the trained range (60 deg) - the hidden side will be invented",
+        "azimuth_deg": 70.0,
+        "elevation_deg": 0.0
+      }
+    },
+    {
+      "id": "red-elevation",
+      "description": "Level azimuth but 40 deg elevation: red on the elevation axis.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          0.0,
+          4.0813,
+          3.0
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": 0.0,
+      "elevation_deg": 40.0,
+      "expected": {
+        "zone": "red",
+        "reason": "elevation 40 deg is beyond the trained range (30 deg) - the hidden side will be invented",
+        "azimuth_deg": 0.0,
+        "elevation_deg": 40.0
+      }
+    },
+    {
+      "id": "derived-from-pose",
+      "description": "No explicit azimuth/elevation: both are derived from the camera pose, as the node does.",
+      "subject": {
+        "name": "Nia",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.7,
+        "facing_yaw_deg": 0
+      },
+      "camera": {
+        "eye": [
+          1.5,
+          2.2,
+          2.5981
+        ],
+        "target": [
+          0.0,
+          1.564,
+          0.0
+        ],
+        "focal_mm": 35.0,
+        "sensor_mm": 36.0,
+        "aspect": 1.7777777777777777,
+        "roll_deg": 0.0,
+        "fov": 0.0
+      },
+      "azimuth_deg": null,
+      "elevation_deg": null,
+      "expected": {
+        "zone": "green",
+        "reason": "inside the trained range (azimuth 30 deg <= 45 deg, elevation 12 deg <= 30 deg)",
+        "azimuth_deg": 30.0,
+        "elevation_deg": 11.969
+      }
+    }
+  ],
+  "autoframe": [
+    {
+      "id": "autoframe-medium-thirds-left",
+      "description": "Solvable: medium shot, subject on the left third.",
+      "subject": {
+        "name": "Juno",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "camera": {
+          "eye": [
+            0.0,
+            1.61,
+            4.32330331127405
+          ],
+          "target": [
+            0.7860939577594122,
+            0.7612008264462812,
+            0.0
+          ],
+          "focal_mm": 35.0,
+          "sensor_mm": 36.0,
+          "aspect": 1.7777777777777777,
+          "roll_deg": 0.0,
+          "fov": 40.0
+        },
+        "report": {
+          "subject": "Juno",
+          "shot_type": "medium",
+          "scores": [
+            {
+              "rule": "in_frame",
+              "pass": true,
+              "value": 1.0,
+              "target": "subject's face within frame & in front",
+              "weight": 1
+            },
+            {
+              "rule": "rule_of_thirds",
+              "pass": true,
+              "value": -0.286,
+              "target": "eyes near x=\u00b10.33 (not centered)",
+              "weight": 0.8
+            },
+            {
+              "rule": "headroom",
+              "pass": true,
+              "value": 0.375,
+              "target": "top gap in [0.10, 0.45]",
+              "weight": 0.7
+            },
+            {
+              "rule": "shot_size",
+              "pass": true,
+              "value": 0.55,
+              "target": "subject 40\u201375% of frame height (MS)",
+              "weight": 1.0
+            },
+            {
+              "rule": "lead_room",
+              "pass": false,
+              "value": -0.286,
+              "target": "gaze leads into frame",
+              "weight": 0.4,
+              "correction": "flip composition: leave space in the direction the subject faces"
+            },
+            {
+              "rule": "negative_space",
+              "pass": true,
+              "value": 0.858,
+              "target": ">0.7 reads isolated; ~0.5 balanced",
+              "weight": 0.3
+            },
+            {
+              "rule": "camera_angle",
+              "pass": true,
+              "value": 0.0,
+              "target": "eye-level (neutral)",
+              "weight": 0.3
+            },
+            {
+              "rule": "level",
+              "pass": true,
+              "value": 0.0,
+              "target": "roll\u22480 (level)",
+              "weight": 0.5
+            },
+            {
+              "rule": "direct_address",
+              "pass": true,
+              "value": 0.0,
+              "target": "direct address (down the lens)",
+              "weight": 0.0
+            }
+          ],
+          "overall_pass": true
+        },
+        "converged": true,
+        "iterations": 3,
+        "residual": []
+      }
+    },
+    {
+      "id": "autoframe-closeup-centered",
+      "description": "Solvable: centred close-up (symmetry intent).",
+      "subject": {
+        "name": "Juno",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "shot_type": "closeup",
+      "intent": {
+        "angle": "eye",
+        "side": "center",
+        "center": true,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "camera": {
+          "eye": [
+            0.0,
+            1.61,
+            2.7424387930452423
+          ],
+          "target": [
+            0.0,
+            1.0221393702422144,
+            0.0
+          ],
+          "focal_mm": 35.0,
+          "sensor_mm": 36.0,
+          "aspect": 1.7777777777777777,
+          "roll_deg": 0.0,
+          "fov": 40.0
+        },
+        "report": {
+          "subject": "Juno",
+          "shot_type": "closeup",
+          "scores": [
+            {
+              "rule": "in_frame",
+              "pass": true,
+              "value": 1.0,
+              "target": "subject's face within frame & in front",
+              "weight": 1
+            },
+            {
+              "rule": "rule_of_thirds",
+              "pass": true,
+              "value": 0.0,
+              "target": "centered (symmetry intended)",
+              "weight": 1.0
+            },
+            {
+              "rule": "headroom",
+              "pass": true,
+              "value": 0.263,
+              "target": "top gap in [0.05, 0.30]",
+              "weight": 1.0
+            },
+            {
+              "rule": "shot_size",
+              "pass": true,
+              "value": 0.823,
+              "target": "subject \u226570% of frame height (CU)",
+              "weight": 1.0
+            },
+            {
+              "rule": "lead_room",
+              "pass": true,
+              "value": 0.0,
+              "target": "gaze leads into frame",
+              "weight": 0.4
+            },
+            {
+              "rule": "negative_space",
+              "pass": true,
+              "value": 0.701,
+              "target": ">0.7 reads isolated; ~0.5 balanced",
+              "weight": 0.3
+            },
+            {
+              "rule": "camera_angle",
+              "pass": true,
+              "value": 0.0,
+              "target": "eye-level (neutral)",
+              "weight": 0.3
+            },
+            {
+              "rule": "level",
+              "pass": true,
+              "value": 0.0,
+              "target": "roll\u22480 (level)",
+              "weight": 0.5
+            },
+            {
+              "rule": "direct_address",
+              "pass": true,
+              "value": 0.0,
+              "target": "direct address (down the lens)",
+              "weight": 0.0
+            }
+          ],
+          "overall_pass": true
+        },
+        "converged": true,
+        "iterations": 3,
+        "residual": []
+      }
+    },
+    {
+      "id": "autoframe-wide-low",
+      "description": "Solvable: wide shot from a low angle.",
+      "subject": {
+        "name": "Juno",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "shot_type": "wide",
+      "intent": {
+        "angle": "low",
+        "side": "right",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "camera": {
+          "eye": [
+            0.0,
+            0.4,
+            8.01347580674265
+          ],
+          "target": [
+            0.0,
+            1.61,
+            0.0
+          ],
+          "focal_mm": 35.0,
+          "sensor_mm": 36.0,
+          "aspect": 1.7777777777777777,
+          "roll_deg": 0.0,
+          "fov": 40.0
+        },
+        "report": {
+          "subject": "Juno",
+          "shot_type": "wide",
+          "scores": [
+            {
+              "rule": "in_frame",
+              "pass": true,
+              "value": 1.0,
+              "target": "subject's face within frame & in front",
+              "weight": 1
+            },
+            {
+              "rule": "rule_of_thirds",
+              "pass": false,
+              "value": 0.0,
+              "target": "eyes near x=\u00b10.33 (not centered)",
+              "weight": 0.6,
+              "correction": "offset subject to a third: shift camera x / aim (eyes at ndcX=0.00)"
+            },
+            {
+              "rule": "headroom",
+              "pass": false,
+              "value": 0.953,
+              "target": "top gap in [0.20, 0.70]",
+              "weight": 0.4,
+              "correction": "too much headroom: raise the camera target or push in"
+            },
+            {
+              "rule": "shot_size",
+              "pass": true,
+              "value": 0.302,
+              "target": "subject 15\u201345% of frame height (WS)",
+              "weight": 1.0
+            },
+            {
+              "rule": "lead_room",
+              "pass": true,
+              "value": 0.0,
+              "target": "gaze leads into frame",
+              "weight": 0.3
+            },
+            {
+              "rule": "negative_space",
+              "pass": true,
+              "value": 0.95,
+              "target": ">0.7 reads isolated; ~0.5 balanced",
+              "weight": 0.4
+            },
+            {
+              "rule": "camera_angle",
+              "pass": true,
+              "value": -1.21,
+              "target": "low (power/heroic)",
+              "weight": 0.3
+            },
+            {
+              "rule": "level",
+              "pass": true,
+              "value": 0.0,
+              "target": "roll\u22480 (level)",
+              "weight": 0.5
+            },
+            {
+              "rule": "direct_address",
+              "pass": true,
+              "value": 8.587,
+              "target": "near-lens (engaged)",
+              "weight": 0.0
+            }
+          ],
+          "overall_pass": true
+        },
+        "converged": true,
+        "iterations": 1,
+        "residual": []
+      }
+    },
+    {
+      "id": "autoframe-medium-dutch",
+      "description": "Solvable: medium shot with an intended Dutch angle.",
+      "subject": {
+        "name": "Juno",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 8.0,
+        "azimuth_deg": 0.0
+      },
+      "expected": {
+        "camera": {
+          "eye": [
+            0.0,
+            1.61,
+            4.294979316786218
+          ],
+          "target": [
+            0.8349231191919189,
+            0.8092288885950416,
+            0.0
+          ],
+          "focal_mm": 35.0,
+          "sensor_mm": 36.0,
+          "aspect": 1.7777777777777777,
+          "roll_deg": 8.0,
+          "fov": 40.0
+        },
+        "report": {
+          "subject": "Juno",
+          "shot_type": "medium",
+          "scores": [
+            {
+              "rule": "in_frame",
+              "pass": true,
+              "value": 1.0,
+              "target": "subject's face within frame & in front",
+              "weight": 1
+            },
+            {
+              "rule": "rule_of_thirds",
+              "pass": true,
+              "value": -0.263,
+              "target": "eyes near x=\u00b10.33 (not centered)",
+              "weight": 0.8
+            },
+            {
+              "rule": "headroom",
+              "pass": true,
+              "value": 0.332,
+              "target": "top gap in [0.10, 0.45]",
+              "weight": 0.7
+            },
+            {
+              "rule": "shot_size",
+              "pass": true,
+              "value": 0.551,
+              "target": "subject 40\u201375% of frame height (MS)",
+              "weight": 1.0
+            },
+            {
+              "rule": "lead_room",
+              "pass": false,
+              "value": -0.263,
+              "target": "gaze leads into frame",
+              "weight": 0.4,
+              "correction": "flip composition: leave space in the direction the subject faces"
+            },
+            {
+              "rule": "negative_space",
+              "pass": true,
+              "value": 0.857,
+              "target": ">0.7 reads isolated; ~0.5 balanced",
+              "weight": 0.3
+            },
+            {
+              "rule": "camera_angle",
+              "pass": true,
+              "value": 0.0,
+              "target": "eye-level (neutral)",
+              "weight": 0.3
+            },
+            {
+              "rule": "level",
+              "pass": true,
+              "value": 8.0,
+              "target": "Dutch 8\u00b0 (unease intended)",
+              "weight": 0.5
+            },
+            {
+              "rule": "direct_address",
+              "pass": true,
+              "value": 0.0,
+              "target": "direct address (down the lens)",
+              "weight": 0.0
+            }
+          ],
+          "overall_pass": true
+        },
+        "converged": true,
+        "iterations": 3,
+        "residual": []
+      }
+    },
+    {
+      "id": "autoframe-offset-azimuth",
+      "description": "Solvable: the camera orbits 25 deg off the subject's front.",
+      "subject": {
+        "name": "Juno",
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "height": 1.75,
+        "facing_yaw_deg": 0
+      },
+      "shot_type": "medium",
+      "intent": {
+        "angle": "eye",
+        "side": "left",
+        "center": false,
+        "dutch_deg": 0.0,
+        "azimuth_deg": 25.0
+      },
+      "expected": {
+        "camera": {
+          "eye": [
+            1.827106930388449,
+            1.61,
+            3.918243456729005
+          ],
+          "target": [
+            0.7124430752598147,
+            0.7612008264462812,
+            -0.33221766199314956
+          ],
+          "focal_mm": 35.0,
+          "sensor_mm": 36.0,
+          "aspect": 1.7777777777777777,
+          "roll_deg": 0.0,
+          "fov": 40.0
+        },
+        "report": {
+          "subject": "Juno",
+          "shot_type": "medium",
+          "scores": [
+            {
+              "rule": "in_frame",
+              "pass": true,
+              "value": 1.0,
+              "target": "subject's face within frame & in front",
+              "weight": 1
+            },
+            {
+              "rule": "rule_of_thirds",
+              "pass": true,
+              "value": -0.286,
+              "target": "eyes near x=\u00b10.33 (not centered)",
+              "weight": 0.8
+            },
+            {
+              "rule": "headroom",
+              "pass": true,
+              "value": 0.375,
+              "target": "top gap in [0.10, 0.45]",
+              "weight": 0.7
+            },
+            {
+              "rule": "shot_size",
+              "pass": true,
+              "value": 0.55,
+              "target": "subject 40\u201375% of frame height (MS)",
+              "weight": 1.0
+            },
+            {
+              "rule": "lead_room",
+              "pass": false,
+              "value": -0.286,
+              "target": "gaze leads into frame",
+              "weight": 0.4,
+              "correction": "flip composition: leave space in the direction the subject faces"
+            },
+            {
+              "rule": "negative_space",
+              "pass": true,
+              "value": 0.858,
+              "target": ">0.7 reads isolated; ~0.5 balanced",
+              "weight": 0.3
+            },
+            {
+              "rule": "camera_angle",
+              "pass": true,
+              "value": 0.0,
+              "target": "eye-level (neutral)",
+              "weight": 0.3
+            },
+            {
+              "rule": "level",
+              "pass": true,
+              "value": 0.0,
+              "target": "roll\u22480 (level)",
+              "weight": 0.5
+            },
+            {
+              "rule": "direct_address",
+              "pass": true,
+              "value": 25.0,
+              "target": "off-lens (observational)",
+              "weight": 0.0
+            }
+          ],
+          "overall_pass": true
+        },
+        "converged": true,
+        "iterations": 3,
+        "residual": []
+      }
+    }
+  ]
+}

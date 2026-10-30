@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfyui-cinematographer"
+version = "0.1.0"
+description = "ComfyUI nodes that evaluate a frame geometrically and return the camera correction in metres, plus a re-shoot workflow for LTX + CrossView-Warp."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Magieva" }]
+keywords = [
+    "comfyui",
+    "comfyui-nodes",
+    "cinematography",
+    "camera",
+    "framing",
+    "re-shoot",
+    "ltx-video",
+    "crossview-warp",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+]
+
+# The engine (geometry, framing, scene, continuity, autoframe, reliability) is
+# stdlib-only by design: it is pure arithmetic over metres and degrees. ComfyUI
+# is NOT a pip dependency -- it is the host application, and the node pack
+# imports cleanly without it.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/nathaniel-magieva/ComfyUI-Cinematographer"
+Repository = "https://github.com/nathaniel-magieva/ComfyUI-Cinematographer"
+Issues = "https://github.com/nathaniel-magieva/ComfyUI-Cinematographer/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools]
+packages = ["cinematographer"]
+include-package-data = false
+
+[tool.comfy]
+PublisherId = "magieva"
+DisplayName = "ComfyUI-Cinematographer"
+requires-comfyui = ">=0.3.0"

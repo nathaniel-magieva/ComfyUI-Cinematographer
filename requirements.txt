@@ -1,0 +1,17 @@
+# ComfyUI-Cinematographer -- runtime requirements.
+#
+# There are none. The engine (geometry, framing, scene, continuity, autoframe,
+# reliability) and the six ComfyUI nodes are stdlib-only by design: pure
+# arithmetic over metres and degrees, no numpy, no torch, no vision model. That
+# is what makes `python -c "import cinematographer"` work on a machine with no
+# ComfyUI installed, and it is why the framing verdict is reproducible.
+#
+# ComfyUI itself is NOT listed here. It is the host application, not a library
+# dependency, and the node pack imports cleanly without it.
+#
+# The re-shoot workflow graphs under ../workflows/ do need models and custom
+# nodes, but those are ComfyUI-side installs, not pip requirements of this
+# package. See each graph's `_README` for the exact node packs and weights.
+#
+# Optional, for development only:
+#   pytest>=7.0     # `pip install -e ".[dev]"`

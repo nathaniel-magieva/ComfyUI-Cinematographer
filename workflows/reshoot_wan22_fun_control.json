@@ -1,0 +1,513 @@
+{
+  "_README": [
+    "Re-shoot a clip from a new camera angle on the Apache-2.0-only Wan 2.2 path.",
+    "ComfyUI API-format workflow. Node category: Cinematographer.",
+    "",
+    "This is the licence-clean alternative to reshoot_ltx_crossview.json: every model in",
+    "the critical path is Apache-2.0 or open, with no revenue-capped community licence and",
+    "no closed API. Same camera-steering engine (CrossView-Warp), different renderer.",
+    "",
+    "STATUS: NOT VERIFIED. This graph has never been executed. It was authored from real",
+    "node schemas (see PROVENANCE) but no ComfyUI instance was available where it was",
+    "written, so nothing here is a claim that it runs. What IS verified is structural, and",
+    "you can re-run it yourself:  python3 workflows/validate_graphs.py",
+    "That checks the file parses as JSON, that every node has class_type + inputs, that",
+    "every class_type is in a table of output-slot counts read from the node sources, that",
+    "every link resolves to an existing node id and a slot that node declares, that the",
+    "graph is acyclic, and that every node is reachable from a SaveVideo. It does NOT check",
+    "that ComfyUI accepts the prompt. Treat the first run as a debugging session.",
+    "",
+    "NAMING NOTE -- read this before filing a bug. The file is named ..._fun_control.json",
+    "because the concrete Wan 2.2 checkpoint is Fun-Control. The conditioning family is",
+    "VACE-style control-video (a control clip drives the structure of the output), which is",
+    "why earlier revisions of this file said 'vace'. ComfyUI ships no Wan 2.2 VACE",
+    "checkpoint: every video_wan_vace_* template in Comfy-Org/workflow_templates points at",
+    "wan2.1_vace_14B_fp16.safetensors, which is Wan 2.1. Wan 2.2's control-video model is",
+    "Fun-Control. To move to true VACE instead,",
+    "replace node 16 with WanVaceToVideo and add TrimVideoLatent after the sampler, and",
+    "point node 8 at wan2.1_vace_14B_fp16.safetensors; the control_video wiring is",
+    "unchanged. Both are Apache-2.0.",
+    "",
+    "PROVENANCE. Derived from ComfyUI's own template:",
+    "  Comfy-Org/workflow_templates  templates/video_wan2_2_14B_fun_control.json",
+    "  (read 2026-10-29; UI format, converted to API format by hand)",
+    "Input names were read from the actual node sources rather than guessed:",
+    "  ComfyUI master  comfy_extras/nodes_wan.py       Wan22FunControlToVideo",
+    "  ComfyUI master  comfy_extras/nodes_moge.py      LoadMoGeModel, MoGeInference",
+    "  ComfyUI master  comfy_extras/nodes_video.py     LoadVideo, GetVideoComponents,",
+    "                                                  CreateVideo, SaveVideo",
+    "  ComfyUI master  comfy_extras/nodes_images.py    ImageScale, ImageFromBatch",
+    "  ComfyUI master  nodes.py                        UNETLoader, CLIPLoader, VAELoader,",
+    "                                                  CLIPTextEncode, ModelSamplingSD3,",
+    "                                                  KSamplerAdvanced, VAEDecode",
+    "  Cseti           ComfyUI-CrossViewWarp/crossview_warp_node.py   CrossViewWarp",
+    "",
+    "DELIBERATE DELTAS from that template, and only these:",
+    "  1. The Canny control preprocessor is replaced by CrossViewWarp. That is the whole",
+    "     point of the entry: a geometry-steered control clip (the source reprojected into",
+    "     the requested camera pose, magenta where the source never saw) instead of edges.",
+    "  2. ref_image is wired to frame 0 of the source clip through ImageFromBatch, instead",
+    "     of the template's separate LoadImage. The identity anchor is the clip you are",
+    "     re-shooting, not a second file to keep in sync.",
+    "  3. The template's muted second branch (the 1.3B VACE model, mode 4) is dropped, as an",
+    "     API export drops muted nodes.",
+    "  4. The lightx2v 4-step LoRAs are deliberately NOT used. They are a throughput hack",
+    "     that changes what the graph does; this graph is about geometry, not speed. The",
+    "     template's own 20 steps / cfg 3.5 two-stage high-noise -> low-noise sampler is",
+    "     kept as-is.",
+    "  5. WanCameraEmbedding's 9 camera presets are deliberately NOT used. The entry's",
+    "     argument is a computed judgement, not a preset: the camera comes from",
+    "     CrossViewWarp, driven by the same pose the Cinematographer nodes grade.",
+    "  6. filename_prefix -> cinematographer/*, to namespace the outputs.",
+    "  7. The positive prompt is an obvious placeholder. If a generated clip ever shows",
+    "     PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN, injection did not run; that is",
+    "     the signal it is there for.",
+    "  8. LoadVideo.file is a placeholder filename. The app overwrites it with the uploaded",
+    "     clip on every request.",
+    "  9. roll_lock / frame_count / interpolation are passed explicitly on CrossViewWarp.",
+    "     The node keeps those widget slots (hidden and ignored) because ComfyUI stores",
+    "     widget values positionally; passing them by name is harmless and keeps the file",
+    "     diffable against a future re-export.",
+    " 10. The negative prompt is Wan's own recommended negative, verbatim -- the same string",
+    "     the upstream Wan 2.2 examples carry.",
+    "",
+    "WHAT IS VERIFIED vs NOT:",
+    "  VERIFIED      valid JSON; class_type + inputs on every node; every link resolves to",
+    "                an existing node id and a declared output slot; acyclic.",
+    "  NOT VERIFIED  that ComfyUI accepts this prompt; that the node packs and weights below",
+    "                are installed; that it produces a clip; that the clip matches the",
+    "                requested angle. None of that has been run.",
+    "",
+    "REQUIRED NODE PACKS (custom):",
+    "  ComfyUI-CrossViewWarp   (Apache-2.0)   CrossViewWarp",
+    "  Everything else is ComfyUI core.",
+    "",
+    "REQUIRED WEIGHTS (paths as ComfyUI names them):",
+    "  models/diffusion_models/wan2.2_fun_control_high_noise_14B_fp8_scaled.safetensors",
+    "  models/diffusion_models/wan2.2_fun_control_low_noise_14B_fp8_scaled.safetensors",
+    "  models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    "  models/vae/wan_2.1_vae.safetensors",
+    "  models/geometry_estimation/moge_2_vitl_normal_fp16.safetensors",
+    "",
+    "LICENCE. Wan 2.2 weights are Apache-2.0; CrossView-Warp and its node pack are",
+    "Apache-2.0; MoGe-2 is open. No MiniMax H3, no closed API, no revenue-capped licence",
+    "anywhere in the critical path. This is the zero-caveat stack.",
+    "",
+    "MEASURED: nothing. No timing, no VRAM figure, no output. The reference app this is",
+    "modelled on was demonstrated on a 96 GB GPU; Wan 2.2 Fun-Control 14B fp8 is lighter,",
+    "but that is an expectation, not a measurement."
+  ],
+  "1": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "PLACEHOLDER_SET_BY_THE_APP.mp4"
+    },
+    "_meta": {
+      "title": "Source clip"
+    }
+  },
+  "2": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Split clip into frames / audio / fps"
+    }
+  },
+  "3": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 832,
+      "height": 480,
+      "crop": "disabled"
+    },
+    "_meta": {
+      "title": "Resize to the Wan working size (832x480, /16)"
+    }
+  },
+  "4": {
+    "class_type": "LoadMoGeModel",
+    "inputs": {
+      "model_name": "moge_2_vitl_normal_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "MoGe-2 model"
+    }
+  },
+  "5": {
+    "class_type": "MoGeInference",
+    "inputs": {
+      "moge_model": [
+        "4",
+        0
+      ],
+      "image": [
+        "3",
+        0
+      ],
+      "resolution_level": 2,
+      "fov_x_degrees": 0.0,
+      "batch_size": 4,
+      "force_projection": true,
+      "apply_mask": true,
+      "refine_steps": 3
+    },
+    "_meta": {
+      "title": "Metric geometry (MoGe-2)"
+    }
+  },
+  "6": {
+    "class_type": "CrossViewWarp",
+    "inputs": {
+      "frames": [
+        "3",
+        0
+      ],
+      "moge_geometry": [
+        "5",
+        0
+      ],
+      "azimuth": 30.0,
+      "elevation": 10.0,
+      "distance": 1.0,
+      "hfov": 50.0,
+      "vertical_shift": 0.0,
+      "depth_ratio": 6.0,
+      "smooth_depth": false,
+      "invert_depth": false,
+      "roll_lock": true,
+      "pivot_override": true,
+      "pivot_x": 0.0,
+      "pivot_y": 0.0,
+      "pivot_z": 1.05,
+      "use_keyframes": false,
+      "frame_count": 0,
+      "keyframes": "[]",
+      "interp_motion": "linear",
+      "interpolation": "linear",
+      "keep_source_aim": true,
+      "preview_size": 512,
+      "frame_index": 1
+    },
+    "_meta": {
+      "title": "CrossView-Warp: reproject into the new camera pose (green zone)"
+    }
+  },
+  "7": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "3",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "_meta": {
+      "title": "Frame 0 of the source = the identity anchor"
+    }
+  },
+  "8": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_fun_control_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Wan 2.2 Fun-Control 14B (high noise)"
+    }
+  },
+  "9": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "shift": 8.0
+    },
+    "_meta": {
+      "title": "Model sampling (high)"
+    }
+  },
+  "10": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_fun_control_low_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Wan 2.2 Fun-Control 14B (low noise)"
+    }
+  },
+  "11": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "shift": 8.0
+    },
+    "_meta": {
+      "title": "Model sampling (low)"
+    }
+  },
+  "12": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Wan text encoder"
+    }
+  },
+  "13": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "_meta": {
+      "title": "Wan VAE"
+    }
+  },
+  "14": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "12",
+        0
+      ],
+      "text": "PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN"
+    },
+    "_meta": {
+      "title": "Positive prompt (placeholder)"
+    }
+  },
+  "15": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "12",
+        0
+      ],
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
+    },
+    "_meta": {
+      "title": "Negative prompt (Wan default)"
+    }
+  },
+  "16": {
+    "class_type": "Wan22FunControlToVideo",
+    "inputs": {
+      "positive": [
+        "14",
+        0
+      ],
+      "negative": [
+        "15",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ],
+      "width": 832,
+      "height": 480,
+      "length": 81,
+      "batch_size": 1,
+      "control_video": [
+        "6",
+        0
+      ],
+      "ref_image": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Condition on the warp guide + the source frame 0"
+    }
+  },
+  "17": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "model": [
+        "9",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "16",
+        1
+      ],
+      "latent_image": [
+        "16",
+        2
+      ],
+      "add_noise": "enable",
+      "noise_seed": 42,
+      "steps": 20,
+      "cfg": 3.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 10,
+      "return_with_leftover_noise": "enable"
+    },
+    "_meta": {
+      "title": "Sample: high-noise expert, steps 0-10"
+    }
+  },
+  "18": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "model": [
+        "11",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "16",
+        1
+      ],
+      "latent_image": [
+        "17",
+        0
+      ],
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": 20,
+      "cfg": 3.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 10,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable"
+    },
+    "_meta": {
+      "title": "Sample: low-noise expert, steps 10-20"
+    }
+  },
+  "19": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "18",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode video"
+    }
+  },
+  "20": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ],
+      "fps": 16.0
+    },
+    "_meta": {
+      "title": "Result"
+    }
+  },
+  "21": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "20",
+        0
+      ],
+      "filename_prefix": "cinematographer/reshoot_wan22",
+      "format": "mp4",
+      "codec": "h264"
+    },
+    "_meta": {
+      "title": "Save result"
+    }
+  },
+  "22": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "6",
+        0
+      ],
+      "fps": 16.0
+    },
+    "_meta": {
+      "title": "Warp guide"
+    }
+  },
+  "23": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "22",
+        0
+      ],
+      "filename_prefix": "cinematographer/warp_guide_wan22",
+      "format": "mp4",
+      "codec": "h264"
+    },
+    "_meta": {
+      "title": "Save warp guide"
+    }
+  },
+  "24": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ],
+      "audio": [
+        "2",
+        1
+      ],
+      "fps": 16.0
+    },
+    "_meta": {
+      "title": "Result, original audio"
+    }
+  },
+  "25": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "24",
+        0
+      ],
+      "filename_prefix": "cinematographer/reshoot_wan22_original_audio",
+      "format": "mp4",
+      "codec": "h264"
+    },
+    "_meta": {
+      "title": "Save result with the source audio"
+    }
+  }
+}
