@@ -299,6 +299,7 @@ def main() -> int:
             structural.append(f"{fx['id']}: unexpected rule set (diff {sorted(missing)})")
 
     failures: list[Mismatch] = []
+    findings: list[str] = []
     total = 0
 
     print("[1/3] JS vs frozen fixtures")
@@ -307,6 +308,9 @@ def main() -> int:
         total += len(fixtures[section])
         print(f"  {section:<12} {len(fixtures[section]) - len(ms)}/{len(fixtures[section])} OK")
         failures.extend(ms)
+    d_checked, d_ok, d_engine = compare_director(fixtures, js, None, failures, findings)
+    total += d_checked
+    print(f"  {'director':<12} {d_ok}/{d_checked} OK")
     print()
 
     if engine:
@@ -328,15 +332,46 @@ def main() -> int:
             print(f"  {section:<12} {len(fixtures[section]) - len(ms)}/{len(fixtures[section])} OK")
             failures.extend(ms)
         print()
+
+        # The Director's Panel engine modules are a separate import: they are not
+        # part of the six geometry modules, and their absence must be loud.
+        director_mods, director_error = load_director_engine()
+        print("[4/4] Director's Panel — engine enums vs the API lists")
+        if director_mods:
+            _, _, compared = compare_director(
+                fixtures, js, director_mods, failures, findings, check_js=False
+            )
+            if compared:
+                print("  engine lists compared against the frozen API enums")
+            else:
+                print("  no director fixtures to compare")
+        else:
+            print("  SKIPPED — cinematographer/director.py is NOT importable")
+            print(f"            reason: {director_error}")
+            print("            This is a SKIP, not a pass: the Director tab's option lists are")
+            print("            currently checked against the frozen API capture only, with no")
+            print("            cross-check against the engine. Re-run once it lands.")
+            findings.append(
+                "director.py not importable — the Director tab's enums are NOT cross-checked "
+                f"against the engine ({director_error})"
+            )
+        print()
     else:
         print("[2/3] Python engine vs frozen fixtures — SKIPPED (engine not importable)")
         print("[3/3] Python engine vs JS (live)         — SKIPPED (engine not importable)")
+        print("[4/4] Director's Panel                   — SKIPPED (engine not importable)")
         print()
 
     if structural:
         print("Structural problems:")
         for s in structural:
             print(f"    {s}")
+        print()
+
+    if findings:
+        print("FINDINGS — not failures, but do not let them go quiet:")
+        for f in findings:
+            print(f"    {f}")
         print()
 
     if failures or structural or stale:
@@ -359,6 +394,163 @@ def main() -> int:
         + ("" if engine else " (JS vs fixtures only; Python engine unavailable)")
     )
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Director's Panel
+# ---------------------------------------------------------------------------
+#
+# The Director tab's option lists are the API's closed enumerations. Two things
+# are checked:
+#
+#   * `web/director.js` must match the frozen lists exactly. Drift is a failure.
+#   * `cinematographer/director.py` + `prompt.py` must not contain a member the
+#     API does not have. An INVENTED member is a failure.
+#
+# An engine that ships a *documented subset* of an enum is a different thing: it
+# is incomplete, not wrong. That is reported as a FINDING — loudly, with the
+# shortfall — and does not fail the check, because failing would push the next
+# person to pad the list to make it green. Padding is the failure mode this
+# project forbids.
+
+#: fixture enum name -> (engine module, constant name)
+DIRECTOR_ENGINE_ENUMS = {
+    "genre": ("director", "GENRES"),
+    "era": ("director", "ERAS"),
+    "pacing": ("director", "TEMPOS"),
+    "camera_model": ("director", "CAMERA_BODIES"),
+    "camera_lens": ("director", "LENSES"),
+    "camera_aperture": ("director", "APERTURES"),
+    "camera_movement": ("prompt", "CAMERA_MOVES"),
+    "light": ("director", "LIGHTING_LOOKS"),
+    "color_palette": ("director", "COLOUR_PALETTES"),
+    "emotion": ("director", "EMOTIONS"),
+}
+
+#: Totals the engine declares for enums it ships only partially.
+DIRECTOR_ENGINE_TOTALS = {
+    "camera_movement": ("prompt", "CAMERA_MOVES_TOTAL"),
+    "color_palette": ("director", "COLOUR_PALETTES_TOTAL"),
+}
+
+
+def load_director_engine():
+    """Import the Director's Panel engine modules, or return (None, reason)."""
+    if APP_DIR not in sys.path:
+        sys.path.insert(0, APP_DIR)
+    try:
+        from cinematographer import director as director_mod
+        from cinematographer import prompt as prompt_mod
+    except Exception as exc:  # noqa: BLE001 - report, do not crash
+        return None, f"{type(exc).__name__}: {exc}"
+    return {"director": director_mod, "prompt": prompt_mod}, None
+
+
+def compare_director(
+    fixtures, js, engine_mods, failures, findings, check_js: bool = True
+) -> tuple[int, int, bool]:
+    """Compare the Director section. Returns (checked, ok, engine_compared)."""
+    section = fixtures.get("director") or {}
+    enums = section.get("enums", [])
+    credits = section.get("credits", [])
+    if not enums and not credits:
+        return 0, 0, False
+
+    checked = 0
+    ok = 0
+
+    # --- JS enums vs the frozen lists ---------------------------------------
+    # A fixture may declare `ui_only` members: values the shipped UI offers but
+    # the documented API rejects. The panel is required to show them AND to flag
+    # them, so the JS list must equal the API values plus exactly those extras —
+    # no more (drift) and no fewer (a hidden contradiction).
+    js_enums = {row["id"]: row["actual"] for row in js.get("director", {}).get("enums", [])}
+    for fx in enums:
+        if not check_js:
+            break
+        checked += 1
+        got = js_enums.get(fx["id"])
+        expected_js = list(fx["values"]) + list(fx.get("ui_only", []))
+        if got is None:
+            failures.append(Mismatch(fx["id"], "director.enum", expected_js, "<missing from JS>"))
+            continue
+        if list(got) != expected_js:
+            failures.append(Mismatch(fx["id"], "director.enum", expected_js, list(got)))
+        else:
+            ok += 1
+
+    # --- JS credits vs the published table ----------------------------------
+    js_credits = {row["id"]: row for row in js.get("director", {}).get("credits", [])}
+    for fx in credits:
+        if not check_js:
+            break
+        checked += 1
+        got = js_credits.get(fx["id"])
+        if got is None:
+            failures.append(
+                Mismatch(fx["id"], "director.credits", fx["expected_credits"], "<missing from JS>")
+            )
+            continue
+        if int(got["actual"]) != int(fx["expected_credits"]):
+            failures.append(
+                Mismatch(fx["id"], "director.credits", fx["expected_credits"], got["actual"])
+            )
+        elif int(got["current"]) > int(got["actual"]):
+            failures.append(
+                Mismatch(fx["id"], "director.credits.discount", "<= list", got["current"])
+            )
+        else:
+            ok += 1
+
+    # --- the engine's own lists ---------------------------------------------
+    if not engine_mods:
+        return checked, ok, False
+
+    for fx in enums:
+        name = fx["enum"]
+        target = DIRECTOR_ENGINE_ENUMS.get(name)
+        if not target:
+            findings.append(
+                f"{name}: the engine has no constant for this enum "
+                f"({len(fx['values'])} API values are unmodelled)"
+            )
+            continue
+        mod_name, const_name = target
+        values = getattr(engine_mods[mod_name], const_name, None)
+        if values is None:
+            findings.append(f"{name}: {mod_name}.{const_name} not found in the engine")
+            continue
+
+        engine_values = [str(v) for v in values]
+        api_values = [str(v) for v in fx["values"]]
+
+        # Case-insensitive: the engine uses Title Case for emotions, the panel
+        # uses slugs. That is presentation, not a different enum.
+        engine_lc = {v.lower() for v in engine_values}
+        api_lc = {v.lower() for v in api_values}
+
+        invented = sorted(engine_lc - api_lc)
+        if invented:
+            failures.append(
+                Mismatch(fx["id"], f"director.engine.{const_name}.invented", sorted(api_lc), invented)
+            )
+
+        missing = sorted(api_lc - engine_lc)
+        if missing:
+            total = len(api_values)
+            declared = None
+            dt = DIRECTOR_ENGINE_TOTALS.get(name)
+            if dt:
+                declared = getattr(engine_mods[dt[0]], dt[1], None)
+            findings.append(
+                f"{name}: engine ships {len(engine_values)} of {total} "
+                f"({len(missing)} missing)"
+                + (f"; engine declares TOTAL={declared}" if declared is not None else "")
+                + f" — missing: {', '.join(missing[:6])}"
+                + (" …" if len(missing) > 6 else "")
+            )
+
+    return checked, ok, True
 
 
 def node_version() -> str:

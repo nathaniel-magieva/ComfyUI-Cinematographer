@@ -1,0 +1,1689 @@
+{
+  "_README": [
+    "Cinema Studio 4.0, rebuilt end to end in ComfyUI: BUILD -> ATTACH -> DIRECT -> SHOOT ->",
+    "JUDGE -> POST, in one graph, with the Cinematographer's verdict exposed at the end of the",
+    "judge stage for the app to act on.",
+    "ComfyUI API-format workflow. Node category: Cinematographer.",
+    "",
+    "STATUS: STRUCTURALLY VALIDATED, NOT EXECUTED. This graph has never been run. No ComfyUI",
+    "instance, no GPU and none of the weights below were available where it was written, so",
+    "nothing here is a claim that it works, that it produces a clip, or that the judgement",
+    "agrees with a human. What IS verified you can re-run yourself:",
+    "  python3 workflows/validate_graphs.py",
+    "That checks the file parses as JSON, that every node has class_type + inputs, that every",
+    "class_type is in a table of slot counts, that every link resolves to an existing node id",
+    "and a slot that node declares, that every node supplies a legal number of inputs for its",
+    "class_type, that the graph is acyclic, and that every node is reachable from an output",
+    "node. It does NOT check that ComfyUI accepts the prompt. Treat the first run as a",
+    "debugging session.",
+    "",
+    "ALL TEN NON-CORE NODES ARE NOW READ FROM SOURCE; NONE ARE DECLARED. The six Element and",
+    "POST nodes landed in app/cinematographer/nodes.py while this file was being written, and",
+    "the four Director's Panel nodes (CinemaDirectorPanel, CinemaCameraMove, CinemaEmotionWheel,",
+    "CinemaPromptCompose) landed afterwards. Every input name, slot count and default below is",
+    "read from that file, not guessed, and the validator's NOTE about declared slot counts is now",
+    "GONE because the set it named is empty. That is not a cosmetic change: when the four nodes",
+    "landed, all four were wired wrongly, and the name check caught them.",
+    "",
+    "THE ENGINE IS A PURE DESCRIPTION LAYER, AND THAT SHAPES THIS WHOLE GRAPH. Every one of the",
+    "ten landed nodes is stdlib-only and never touches a pixel. That is a deliberate design",
+    "choice, not an omission, and it has three consequences a reader must know before reading",
+    "the wiring:",
+    "  - CinemaElementSave takes an image PATH (STRING), not an IMAGE tensor. So the BUILD",
+    "    stills are written to disk by SaveImage, and the path is a widget the app fills in.",
+    "  - CinemaGrade, CinemaExtend and CinemaEdit take NO image input and return NO image.",
+    "    They emit PLANS -- grade_json, extend_json, edit_json -- and the module comment in",
+    "    nodes.py says their summaries say 'plan', never 'graded'. CinemaGradeApply is the",
+    "    EXCEPTION and the only node in the pack that changes pixels: it takes the rendered",
+    "    IMAGE plus CinemaGrade.grade_json and returns a graded IMAGE, which this graph writes",
+    "    with SaveImage. So the GRADE is applied; the EXTEND and the EDIT are still only",
+    "    described. That asymmetry is real and is not smoothed over here.",
+    "    exposes the descriptions on output nodes. Applying them is the app's job, and this",
+    "    README would be lying if it said otherwise.",
+    "  - CinemaElementLoad returns an asset PATH (STRING), and a STRING cannot be linked into",
+    "    LoadImage.image. The reason is narrower than it looks, and the obvious summary of it is",
+    "    wrong, so here it is exactly. LoadImage.image declares its type as a raw LIST of",
+    "    filenames (nodes.py:1754), and validate_node_input rejects when the INPUT's declared",
+    "    type is not a string -- `if not isinstance(received_type, str) or not",
+    "    isinstance(input_type, str): return False`. It is the INPUT being a list that rejects,",
+    "    not the output. The function even tolerates the opposite direction explicitly: a",
+    "    list-valued OUTPUT into a COMBO input returns True. Verified by executing the real",
+    "    function, not by reading it.",
+    "    That distinction matters, because it means the link is not impossible -- only",
+    "    impossible from a STRING. An output typed `*` (AnyType) DOES pass, since the AnyType",
+    "    check runs before the list guard. So 'resolve an Element and load it' IS expressible:",
+    "    it would need CinemaElementLoad to expose a second output typed (\"*\",). That is a",
+    "    design call for the node's owner, not something a graph can reach from outside, and an",
+    "    `*` output bypasses type checking entirely, so it is a real trade rather than a free",
+    "    win. This graph does not use it. Instead the first frame comes from the BUILD stage's",
+    "    own in-memory IMAGE, and CinemaElementLoad is a PRE-FLIGHT CHECK -- it resolves the",
+    "    name and reports `found` -- rather than the thing that feeds the sampler. The Element",
+    "    registry reaches the pixels through the PROMPT (the @Name tags composed by",
+    "    CinemaPromptCompose), which is exactly the product's own mechanism.",
+    "",
+    "THE GATE IS A REAL DATA DEPENDENCY, AND THIS FILE PREVIOUSLY SAID IT WAS NOT.",
+    "Correction first, because the earlier claim was wrong and was repeated three times: an",
+    "earlier draft of this README asserted that CinemaGrade had no `corrections` input and that",
+    "the gate was therefore positional. THAT WAS A STALE READ. `nodes` added an optional",
+    "`corrections` STRING to CinemaGrade, and this file kept repeating a read taken before it",
+    "landed -- without re-reading the source. Executing cls.INPUT_TYPES() settles it:",
+    "    CinemaGrade  required temperature, contrast, saturation, sharpness, film_grain,",
+    "                          highlights, exposure   (7 FLOAT)",
+    "                 optional corrections STRING",
+    "                 -> grade_json, is_neutral, summary",
+    "    CinemaGradeApply  required image IMAGE, grade_json STRING, seed INT",
+    "                      -> image, summary   (the only node in the pack that changes pixels)",
+    "So the gate is wired as a LINK, not as a neighbourhood:",
+    "    CinematographerCorrection.corrections -> CinemaGrade.corrections   (the verdict)",
+    "    CinemaGrade.grade_json                -> CinemaGradeApply.grade_json",
+    "    VAEDecodeTiled.image                  -> CinemaGradeApply.image     (the rendered frames)",
+    "    CinemaGradeApply.image                -> SaveImage                 (the graded frame)",
+    "The judge's verdict therefore reaches POST as data. If the verdict is empty the grade is",
+    "neutral; if it carries corrections they are the grade's input. The chain terminates in a",
+    "written file, so the gate is not merely described -- it is on the pixel path.",
+    "Be clear about what a gate is here, though. ComfyUI has no conditional execution in API",
+    "format without a switch node, so a FAIL verdict does not STOP the render; it travels into",
+    "POST as text and shapes the grade. A data dependency is not a branch, and this README will",
+    "not call it one.",
+    "This is also why the validator now asserts the edge itself. A name check proves a link is",
+    "LEGAL; it cannot prove the link is PRESENT, because `corrections` is optional and deleting",
+    "the edge violates nothing. Deleting the gate produced a clean PASS until the edge assertion",
+    "was added -- found by deliberately breaking the graph and watching it still pass.",
+    "",
+    "WHAT THE FIVE STAGES ARE, AND WHAT EACH ONE ACTUALLY DOES HERE:",
+    "",
+    "  BUILD   Generates two stills with Flux.1 [schnell] (Apache-2.0): a character reference",
+    "          and a location clean plate, and writes both to disk with SaveImage. This is the",
+    "          local stand-in for the product's image mode. On the model choice the TIER",
+    "          matters, and an earlier draft of this README got it wrong: the T1 catalogue",
+    "          lists SIX image models on the platform -- GPT Image 2.5 Sunburst, Nano Banana",
+    "          Pro, Flux 2, Seedream 5, GPT Image 2 and Ideogram 4.5 -- and GPT Image 2.5",
+    "          Sunburst is the TUTORIALS' preference (T3), not a product mandate. We pick",
+    "          Flux.1 [schnell] because it is Apache-2.0 and runs locally, and it is a sibling",
+    "          of Flux 2, which the platform itself offers. So this is a licence-driven choice",
+    "          inside the product's own model surface, not the substitution of something",
+    "          foreign. Flux schnell is 4 steps at CFG 1.0.",
+    "  ATTACH  Registers each still as a named, categorised Element (character / location /",
+    "          prop). This is the product's load-bearing idea: an asset is created once and",
+    "          tagged thereafter. Two CinemaElementSave calls, each writing a sidecar and",
+    "          updating the project registry.",
+    "  DIRECT  Sets the Director's Panel: film setup (genre, era, tempo), camera (body, lens,",
+    "          aperture), the camera-move stack, and the Emotion Wheel. Every value is a widget",
+    "          on a node, so every value is explicit and reproducible -- which is the point.",
+    "          The product's own pitch is that a text-only prompt 'returns a different move on",
+    "          every run because speed, path, and end position stay unspecified'; fixing those",
+    "          properties as settings is the mechanism.",
+    "  SHOOT   Composes the prompt from the action text plus the panel, the move stack, the",
+    "          emotion direction and the Element registry, then generates with LTX 2.5 and",
+    "          muxes to mp4. The loader block, sampler chain and sigma schedules are copied",
+    "          verbatim from reshoot_ltx25.json, itself flattened from the official Lightricks",
+    "          two-stage graph -- see that file's README for the provenance.",
+    "  JUDGE   The Cinematographer. Seven pre-existing, already-validated nodes measuring the",
+    "          directed camera pose against the framing rules and returning a pass/fail plus a",
+    "          correction in metres. Its verdict is exposed on output nodes.",
+    "  POST    Three plan nodes: grade, extend, edit. They DESCRIBE; they do not apply.",
+    "",
+    "THE HONEST LIMIT OF THE JUDGE STAGE. The Cinematographer is arithmetic on a camera pose:",
+    "it projects a subject through an eye/target/focal-length triple and scores the geometry.",
+    "It does NOT look at the rendered pixels. It cannot, and the pack says so about itself --",
+    "measuring facial identity or reading a frame needs a vision model and is explicitly out of",
+    "scope. So JUDGE here judges the camera that was DIRECTED, not the clip that came back. It",
+    "sits between SHOOT and POST because that is where a human would look, but a reader should",
+    "not conclude that the graph inspects its own output. It does not.",
+    "The differentiator is narrower than 'it judges the result' and it survives scrutiny: we",
+    "return a MEASURED pass/fail with a correction in metres on the directed camera, where the",
+    "ecosystem's other camera tools return only presets. That is the claim, and it is true.",
+    "",
+    "THE FOUR DIRECTOR NODES HAVE LANDED, AND THIS GRAPH WAS RE-CUT AGAINST THEM. The earlier",
+    "wiring used DECLARED placeholder names, because the nodes did not exist when it was cut.",
+    "When they landed, all four were wired wrongly. The validator's input-NAME check -- added the",
+    "same turn -- caught all four, which is the whole argument for checking names and not just",
+    "counts. The interface below is now read from the source that defines it (nodes.py:1688-2072),",
+    "and the COMBO values were EXECUTED against the engine (director.GENRES, prompt.CAMERA_MOVES,",
+    "...) rather than read out of a grep, because a grep across tuple boundaries silently lies:",
+    "  CinemaDirectorPanel  <- genre, era, pacing, camera_model, camera_lens, camera_aperture,",
+    "                          light, color_palette (8 required); custom_palette,",
+    "                          emotion_character, emotion, emotion_intensity (4 optional)",
+    "                       -> panel_json, prompt_fragment, summary",
+    "  CinemaCameraMove     <- prompt (required); move (optional)",
+    "                       -> clean_prompt, moves, unknown, ok",
+    "  CinemaEmotionWheel   <- character, emotion, intensity",
+    "                       -> direction_json, fragment, summary",
+    "  CinemaPromptCompose  <- action (required); panel_json, registry_path, moves (optional)",
+    "                       -> final_prompt, attachments_json, unresolved_json, ok",
+    "Two notes on the re-cut, because both are places where the obvious wiring is wrong:",
+    "  * CinemaCameraMove.moves is JSON; CinemaPromptCompose.moves wants comma/newline-separated",
+    "    names. Linking them is type-legal (STRING to STRING) and semantically wrong, so they are",
+    "    NOT linked. CinemaPromptCompose resolves @Element/#move itself from `action`;",
+    "    CinemaCameraMove is a PARALLEL resolver that reports what it found. Both read the same",
+    "    text, and every output of both is exposed on a PreviewAny, so a disagreement would be",
+    "    visible rather than inferred.",
+    "  * CinemaDirectorPanel.panel_json is the one real data dependency in DIRECT: it feeds",
+    "    CinemaPromptCompose.panel_json. The other three nodes are diagnostics.",
+    "CinemaPromptCompose imports elements.parse_element_tags rather than writing a second @/#",
+    "parser -- two parsers would drift. It emits `final_prompt` as its primary output.",
+    "One trap for whoever reads that parser, recorded here because this README is what points at",
+    "it: parse_element_tags is GREEDY to the next @/#/punctuation, so",
+    "'@Tamsin walks into @Mirror Dunes' resolves the name 'Tamsin walks into'. That is the",
+    "documented syntax and not a bug -- the delimiter has to be in the prompt.",
+    "THE CONSEQUENCE IS WORSE THAN A MIS-NAMED TAG, AND IT WAS EXECUTED, NOT REASONED ABOUT.",
+    "All four combinations, run rather than reasoned about:",
+    "    case                      final_prompt                    unresolved",
+    "    greedy,    NO registry    '@Tamsin walks into @helmet'     ['Tamsin walks into','helmet']",
+    "    greedy,    WITH registry  '@helmet'                        ['Tamsin walks into']",
+    "    delimited, NO registry    'walks into @Tamsin @helmet'     ['Tamsin','helmet']",
+    "    delimited, WITH registry  'walks into @Tamsin @helmet'     []",
+    "BOTH failing paths fail, and they differ in HOW -- which is the part that changes the advice:",
+    "  * WITH a registry the span is REMOVED. 'walks into' and the @Tamsin tag are gone from the",
+    "    prompt entirely; they survive only in `unresolved`. Reported in the JSON, silent in the",
+    "    prompt -- and the prompt is what gets rendered. This is the worse failure.",
+    "  * With NO registry the span is RE-EMITTED VERBATIM as a malformed tag: final_prompt is",
+    "    literally '@Tamsin walks into @helmet'. The text is still visible, but it is now a tag",
+    "    the engine will never resolve. So the no-registry path is NOT the safe one.",
+    "The fix in both cases is one comma: '@Tamsin, walks into @helmet'.",
+    "THE MECHANISM, because 'the greedy parse eats prose' is the wrong explanation and the right",
+    "one is actionable. It is NOT in clean_prompt: both branches return clean_prompt == '' for the",
+    "greedy input. It is in WHICH NAMES GET RE-EMITTED AS TAGS (prompt.py:422-441):",
+    "  * registry branch (line 425):  element_tags = list(resolution.names)  -- RESOLVED names",
+    "    only. resolution.names is a property over the resolved set, so a miss never appears and",
+    "    the span it covered is dropped from the prompt.",
+    "  * no-registry branch (line 438): element_tags = list(names)  -- EVERY parsed name, so the",
+    "    greedy name is re-emitted verbatim as a malformed tag.",
+    "So the precise rule is: the prose is eaten iff a registry is present AND the greedy name",
+    "misses, because element_tags is built from resolved names in that branch. The greedy parse",
+    "only mis-names; the REGISTRY BRANCH is what discards the span.",
+    "This graph ships no @/# tags of its own (the action text is a placeholder), so the trap does",
+    "not bite here -- but it will bite the first person who types a two-Element action line, and",
+    "it will take their direction with it.",
+    "REGISTRY PATH: this graph leaves CinemaPromptCompose.registry_path UNSET, which is safe",
+    "because all four registry-touching nodes share one default. Verified by AST, not assumed:",
+    "_default_registry_path() is called at nodes.py:1142 (CinemaElementSave), 1238",
+    "(CinemaElementLoad), 1281 (CinemaElementList) and 1995 (CinemaPromptCompose). Save, load,",
+    "list and compose therefore cannot silently split across two registry files.",
+    "",
+    "THE IDENTITY-CONTINUITY PATH IS DELIBERATELY NOT USED. CinemaElementSave has no palette or",
+    "bbox input, so an Element it writes cannot feed elements.character_record_from_element(),",
+    "which raises rather than inventing a palette. Nodes 68 and 69 (ChorosContinuity,",
+    "CharacterContinuity) therefore take their shot list from a hand-written JSON primitive",
+    "(node 61), not from the registry. Nothing in this graph depends on that gap. Closing it",
+    "means adding palette/bbox to CinemaElementSave; until then the identity path is unreachable",
+    "from a graph, and this README says so rather than implying the registry feeds it.",
+    "",
+    "READ FROM SOURCE -- the ten landed nodes, exactly as app/cinematographer/nodes.py declares",
+    "them (read 2026-10-29):",
+    "  CinemaElementSave  <- name, category (ELEMENT_CATEGORIES), image_path | + description,",
+    "                        seed, registry_path  -> element_json, sidecar_path, summary",
+    "  CinemaElementLoad  <- name, category | + registry_path",
+    "                     -> asset_path, element_json, found",
+    "  CinemaElementList  <- category | + registry_path -> names_json, count, summary",
+    "  CinemaGrade        <- the seven GRADE_PARAMS floats -> grade_json, is_neutral, summary",
+    "  CinemaExtend       <- mode, duration_s, overlap_frames -> extend_json, overlap_s, summary",
+    "  CinemaEdit         <- label, bbox_min_x, bbox_min_y, bbox_max_x, bbox_max_y, prompt",
+    "                     -> edit_json, in_frame, summary",
+    "Note what is NOT there on Extend and Edit: no IMAGE. CinemaGradeApply is the one node",
+    "that takes and returns an IMAGE, and CinemaGrade DOES take `corrections` -- an earlier",
+    "draft of this file said otherwise, from a read taken before the input landed.",
+    "",
+    "PROVENANCE for everything else that IS verified:",
+    "  Flux.1 [schnell] block   the official ComfyUI Flux.1 Schnell text-to-image graph, read",
+    "                           from comfy.org/hub/workflows/flux-1-schnell-full-text-to-image",
+    "                           -- UNETLoader flux1-schnell.safetensors, DualCLIPLoader",
+    "                           clip_l + t5xxl_fp16 type flux, VAELoader ae.safetensors,",
+    "                           CLIPTextEncodeFlux guidance 3.5, ConditioningZeroOut for the",
+    "                           negative, EmptySD3LatentImage, KSampler 4 steps CFG 1.0",
+    "                           euler/simple. Slot counts re-read from ComfyUI master:",
+    "                           comfy_extras/nodes_flux.py, comfy_extras/nodes_sd3.py, nodes.py.",
+    "  LTX 2.5 block            copied from reshoot_ltx25.json, itself flattened from",
+    "                           Lightricks/ComfyUI-LTXVideo example_workflows/2.5/",
+    "                           LTX-2.5_T2V_I2V_Two_Stage_Distilled.json (191,541 bytes).",
+    "  Cinematographer block    app/cinematographer/nodes.py, read directly. All seven judge",
+    "                           nodes are pre-existing, tested and published.",
+    "  PreviewAny               comfy_extras/nodes_preview_any.py, OUTPUT_NODE = True.",
+    "  SaveImage                nodes.py, OUTPUT_NODE = True.",
+    "",
+    "ATTRIBUTION DISCIPLINE, since this README quotes a source document. Every quotation and",
+    "every claim about the product below was grepped against",
+    "research/20-workflow-walkthrough.md (shipped in this repository), not",
+    "recalled -- a quotation is a claim, and a misattributed one is worse than a wrong slot",
+    "count because it is unfalsifiable at a glance.",
+    "",
+    "THE CHECK IS TO GREP THE TIER, NOT THE WORDS. The walkthrough tags every sourced claim",
+    "with a provenance tier, and the tier is part of the claim: T1 is Higgsfield's own material",
+    "(docs.higgsfield.ai and the higgsfield.ai blog), while V1/V2/V3 are third-party reviewers",
+    "(Joseph Martin / Thomas Creates / Youri). The tier is printed on the line, usually in the",
+    "same sentence or the same table row. So: T1 means this README may say 'the product does';",
+    "V1/V2/V3 means it must name the reviewer. Grepping the words alone does not catch a tier",
+    "error, which is exactly why re-reading a quotation feels sufficient and is not.",
+    "Three tier errors were caught this way and are corrected in place rather than quietly:",
+    "  - the 'empty of people' location technique is V3's (Youri's), a REVIEWER's, not the",
+    "    product's -- see delta 5;",
+    "  - the image model: the T1 catalogue lists SIX models and GPT Image 2.5 Sunburst is the",
+    "    tutorials' T3 preference, not a product mandate -- see BUILD and delta 1;",
+    "  - the Stage 0 workspace claim carries the walkthrough's own '(b) claimed' grading,",
+    "    because the one section recommending the product is the one section with zero visual",
+    "    evidence (lines 86-88).",
+    "Where the source attributes something to a reviewer rather than to Higgsfield, this",
+    "README names the reviewer.",
+    "",
+    "WHAT THE VALIDATOR CHECKS, AND WHAT IT STILL CANNOT. Worth stating plainly, because a PASS",
+    "is only as strong as the checks behind it and this one got stronger this turn. It checks:",
+    "JSON shape; that every class_type is in a table read from source; that every link resolves",
+    "to a real node and a declared output slot; that every node supplies the right NUMBER of",
+    "inputs; that every supplied input NAME is declared and every REQUIRED name is present; that",
+    "the graph is acyclic; and that every node is reachable from an output node.",
+    "The name check is new, and it earned its place immediately: it caught all four director",
+    "nodes wired with placeholder names the moment those nodes landed. A count check cannot catch",
+    "that, and did not.",
+    "It still CANNOT check, and this README will not pretend otherwise:",
+    "  * input TYPES -- a STRING wired into an IMAGE input passes. Only ComfyUI's own",
+    "    validate_node_input knows that, and this validator does not call it;",
+    "  * widget VALUES -- 'Joy' vs 'joy' in an EMOTIONS combo, or a sampler name that does not",
+    "    exist, passes here and fails at run time. The values in this graph were executed against",
+    "    the engine, but nothing enforces that they stay legal;",
+    "  * whether the graph RUNS. It has never been executed. Structural validation is not",
+    "    execution, and no claim here should be read as one.",
+    "",
+    "DELIBERATE DELTAS from the product, and only these:",
+    "  1. Image mode is Flux.1 [schnell] rather than GPT Image 2.5 Sunburst. See BUILD above.",
+    "     The tier matters and is stated there: the platform offers SIX image models (T1) and",
+    "     GPT Image 2.5 Sunburst is the tutorials' pick (T3), not a product mandate. Flux 2 is",
+    "     among the six, so this is a licence-driven choice inside the product's own model",
+    "     surface rather than a substitution of something foreign. The product's image side is",
+    "     the platform's general image surface, not a Cinema Studio enum set, so no",
+    "     product-specific behaviour is lost here.",
+    "  2. Stage 0 (Project) is not in the graph. A project is a workspace: folders, a brief,",
+    "     shared access, a canvas. None of that is a graph concept, and the teardown's own note",
+    "     is that the workspace claim has ZERO on-screen evidence in the reviews. It is the",
+    "     app's job, not the graph's.",
+    "  3. Stage 2 (MODE) is not a node. Switching from image mode to video mode is a UI state",
+    "     change; this graph IS video mode. The BUILD stage above is the image half, inlined.",
+    "  4. The `@Element` / `#move` tags are composed by CinemaPromptCompose, not typed by hand.",
+    "     The product's syntax is the app's surface; the API's own reference tokens are",
+    "     one-based <<<image_1>>> / <<<video_1>>> / <<<audio_1>>>. This graph emits the app",
+    "     syntax, because that is what the entry is a rebuild of. A workflow built for the",
+    "     product's API would need the tags rewritten -- a real portability limit, not hidden.",
+    "  5. The character reference does NOT enter the video model. LTX 2.5 I2V takes one first",
+    "     frame, and that frame is the location clean plate. The convention behind that is a",
+    "     REVIEWER's, not the product's, and the distinction is kept here deliberately: it is",
+    "     V3's (Youri's) technique, which the walkthrough records as \"V3's convention for",
+    "     locations\" -- describe every location as \"a real photo taken on a film set\" and keep",
+    "     it \"completely empty of people because the characters get added in by the video model",
+    "     later\" [V3 01:38-01:41]. It is a good technique and we follow it. It is not a spec,",
+    "     and an earlier draft of this README called it \"the product's own convention\", which",
+    "     it is not. The character is carried into the shot by the @Tamsin tag in",
+    "     the composed prompt and by the Element registry, not by a second image input. Wiring",
+    "     the character sheet into the sampler as well would misrepresent what LTX 2.5 I2V",
+    "     accepts.",
+    "  6. The camera pose is solved, not typed. CinematographerAutoFrame solves a compliant",
+    "     eye/target/focal-length triple geometrically in 24 iterations and reports whether it",
+    "     converged. This is a superset of the product: Cinema Studio 4.0 DROPPED focal length",
+    "     (a control in 1.0, absent from the 4.0 schema), and our engine has it as a",
+    "     first-class parameter. The Director's Panel's body/lens/aperture selection is what",
+    "     would inform that pose in a full build; here the pose is solved and the panel is",
+    "     carried into the prompt, which is the honest split given that the panel's lens values",
+    "     are hand-tuned character profiles with no published mapping to focal length.",
+    "  7. Every diagnostic terminates in a PreviewAny node. This is not decoration: a ComfyUI",
+    "     node whose output nothing consumes and which is not OUTPUT_NODE = True is PRUNED and",
+    "     never executes, so a diagnostic that nothing reads is a diagnostic that never runs.",
+    "     PreviewAny is a core output node, which is what makes the judge and the POST plans",
+    "     actually execute. The app reads them from the node outputs.",
+    "  8. Extend and Edit are local plan nodes, not Seedance 2.5 endpoint calls. In the real",
+    "     product they are separate endpoints -- the API docs say so plainly -- so this is a",
+    "     rebuild of the FEATURE's description, not of the call, and not of the pixels.",
+    "  9. Sound is generated by LTX 2.5's own audio VAE and muxed by CreateVideo. The product",
+    "     has a sound toggle; here the audio latent is always present, which is the simpler and",
+    "     more honest wiring. Drop nodes 37 and 56 and the audio input on 57 for a silent cut.",
+    " 10. filename_prefix -> cinematographer/*, to namespace our outputs.",
+    " 11. The action prompt and the subject/scene JSON are obvious placeholders. If a generated",
+    "     clip ever shows PLACEHOLDER_ACTION_DID_NOT_RUN, injection did not run; that is the",
+    "     signal it is there for. The two image_path widgets are placeholders in the same way:",
+    "     the app must set them to the paths SaveImage wrote, because CinemaElementSave stores",
+    "     a path and never reads a file. That is the one place where the graph and the app have",
+    "     to agree on a string, and it is a direct consequence of the engine being stdlib-only.",
+    "",
+    "AN OPEN QUESTION, RECORDED NOT RESOLVED. `rosesfield`, a competing entry in this same",
+    "competition, ships `motion-guide-ltx-2-5`, which cross-loads the LTX 2.3 union-control",
+    "IC-LoRA onto LTX 2.5. Cross-loading 2.3 IC-LoRAs into 2.5 is documented as experimental",
+    "with degraded tracking. They ship it anyway. We have not tested it and neither has anyone",
+    "we can cite, so this graph does not do it and this README does not call it wrong. It is a",
+    "real, checkable difference between the two entries and it belongs in the record.",
+    "",
+    "WHAT IS VERIFIED vs NOT:",
+    "  VERIFIED      valid JSON; class_type + inputs on every node; every link resolves to an",
+    "                existing node id and a declared output slot; every node supplies a legal",
+    "                number of inputs; acyclic; every node reachable from an output node.",
+    "  NOT VERIFIED  that ComfyUI accepts this prompt; that the four declared class_types exist",
+    "                or have these signatures; that the weights are installed; that it produces",
+    "                a clip; that the judgement agrees with a human. None of that has been run.",
+    "",
+    "REQUIRED NODE PACKS (custom):",
+    "  NONE. Every class_type in this graph is either ComfyUI core or part of this pack.",
+    "  Notably it does NOT need ComfyUI-LTXVideo or ComfyUI-CrossViewWarp: LTX 2.5's IC-LoRAs",
+    "  are not used, so the Lightricks pack is off the critical path, and there is no camera",
+    "  move node from a third party -- the move stack is a Director's Panel value.",
+    "",
+    "REQUIRED WEIGHTS (paths as ComfyUI names them):",
+    "  models/unet/flux1-schnell.safetensors                       Apache-2.0",
+    "  models/text_encoders/clip_l.safetensors",
+    "  models/text_encoders/t5xxl_fp16.safetensors                 (t5xxl_fp8_e4m3fn_scaled is",
+    "      the lower-memory substitute; swap it into node 2)",
+    "  models/vae/ae.safetensors",
+    "  models/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+    "  models/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+    "  models/vae/ltx-2.5-video-vae-bf16.safetensors",
+    "  models/vae/ltx-2.5-audio-vae-bf16.safetensors",
+    "  models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+    "The five LTX 2.5 names are the verified ones from reshoot_ltx25.json, unchanged. LTX 2.5",
+    "weights are GATED on HuggingFace (Lightricks/LTX-2.5): click 'Agree and Access' once.",
+    "",
+    "LICENCE. Flux.1 [schnell] is Apache-2.0. ComfyUI is GPL-3.0. LTX 2.5 weights are LTX-2.x",
+    "Community (revenue-capped) and gated. No Higgsfield logos, no likeness of any person, no",
+    "MiniMax H3, no closed API, no partner nodes, no network calls -- the graph is licence-clean",
+    "by construction and runs entirely locally. See reshoot_wan22_fun_control.json for the",
+    "Apache-2.0-only alternative to the LTX half.",
+    "",
+    "MEASURED: nothing. No timing, no VRAM figure, no output, no cost. The product shows a",
+    "credit cost on its Generate button before you confirm; this graph has no cost to show,",
+    "because it does not call anything that charges."
+  ],
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "flux1-schnell.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "BUILD - Flux.1 schnell (Apache-2.0)"
+    }
+  },
+  "2": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "BUILD - Flux text encoders"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "_meta": {
+      "title": "BUILD - Flux VAE"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncodeFlux",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "clip_l": "character reference sheet, neutral flat lighting, plain mid-grey background, no baked-in colour cast, front-facing, full head and shoulders, sharp focus",
+      "t5xxl": "character reference sheet, neutral flat lighting, plain mid-grey background, no baked-in colour cast, front-facing, full head and shoulders, sharp focus",
+      "guidance": 3.5
+    },
+    "_meta": {
+      "title": "BUILD - character reference prompt"
+    }
+  },
+  "5": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "4",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "BUILD - negative (zeroed; Flux ignores negatives)"
+    }
+  },
+  "6": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "BUILD - character latent"
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "seed": 42,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "denoise": 1.0
+    },
+    "_meta": {
+      "title": "BUILD - character sample (4 steps, CFG 1.0)"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "BUILD - character reference IMAGE"
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncodeFlux",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "clip_l": "a real photo taken on a film set, empty location clean plate, no people, no characters, wide establishing view, natural light, high detail",
+      "t5xxl": "a real photo taken on a film set, empty location clean plate, no people, no characters, wide establishing view, natural light, high detail",
+      "guidance": 3.5
+    },
+    "_meta": {
+      "title": "BUILD - location clean plate prompt"
+    }
+  },
+  "10": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {
+      "width": 1344,
+      "height": 768,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "BUILD - location latent (16:9)"
+    }
+  },
+  "11": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "seed": 43,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "9",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ],
+      "denoise": 1.0
+    },
+    "_meta": {
+      "title": "BUILD - location sample"
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "BUILD - location clean plate IMAGE"
+    }
+  },
+  "13": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "cinematographer/character_tamsin"
+    },
+    "_meta": {
+      "title": "BUILD - write the character still to disk (its path is what ATTACH registers)"
+    }
+  },
+  "14": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "filename_prefix": "cinematographer/location_mirror_dunes"
+    },
+    "_meta": {
+      "title": "BUILD - write the location still to disk"
+    }
+  },
+  "15": {
+    "class_type": "CinemaElementSave",
+    "inputs": {
+      "name": "Tamsin",
+      "category": "character",
+      "image_path": "PLACEHOLDER_CHARACTER_STILL_PATH_SET_BY_THE_APP.png",
+      "description": "lead, 1980s, anamorphic",
+      "seed": 42
+    },
+    "_meta": {
+      "title": "ATTACH - register the character Element (stores a PATH, never reads the file)"
+    }
+  },
+  "16": {
+    "class_type": "CinemaElementSave",
+    "inputs": {
+      "name": "Mirror Dunes",
+      "category": "location",
+      "image_path": "PLACEHOLDER_LOCATION_STILL_PATH_SET_BY_THE_APP.png",
+      "description": "empty clean plate, wide establishing",
+      "seed": 43
+    },
+    "_meta": {
+      "title": "ATTACH - register the location Element"
+    }
+  },
+  "17": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "15",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "ATTACH - save summary (output node; also forces the save to execute)"
+    }
+  },
+  "18": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "16",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "ATTACH - save summary (output node)"
+    }
+  },
+  "19": {
+    "class_type": "CinemaDirectorPanel",
+    "inputs": {
+      "genre": "epic",
+      "era": "1980s",
+      "pacing": "calm",
+      "camera_model": "35mm-film",
+      "camera_lens": "anamorphic",
+      "camera_aperture": "f4-moderate",
+      "light": "contre-jour",
+      "color_palette": "twilight-fable",
+      "emotion_character": "tamsin",
+      "emotion": "Joy",
+      "emotion_intensity": 0.5
+    },
+    "_meta": {
+      "title": "DIRECT - Director's Panel (8 required + emotion direction)"
+    }
+  },
+  "19b": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "19",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - panel prompt fragment (output node)"
+    }
+  },
+  "19c": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "19",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - panel summary (output node)"
+    }
+  },
+  "20": {
+    "class_type": "CinemaCameraMove",
+    "inputs": {
+      "prompt": "PLACEHOLDER_ACTION_DID_NOT_RUN",
+      "move": "helicopter-shot"
+    },
+    "_meta": {
+      "title": "DIRECT - resolve #move tags against the engine's move list"
+    }
+  },
+  "20b": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "20",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - recognised moves (output node)"
+    }
+  },
+  "20c": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "20",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - UNKNOWN moves, reported not dropped (output node)"
+    }
+  },
+  "20d": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "20",
+        3
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - every #move tag resolved? (output node)"
+    }
+  },
+  "21": {
+    "class_type": "CinemaEmotionWheel",
+    "inputs": {
+      "character": "tamsin",
+      "emotion": "Joy",
+      "intensity": 0.5
+    },
+    "_meta": {
+      "title": "DIRECT - Emotion Wheel (one character)"
+    }
+  },
+  "21b": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "21",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - emotion fragment (output node)"
+    }
+  },
+  "21c": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "21",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "DIRECT - emotion summary (output node)"
+    }
+  },
+  "22": {
+    "class_type": "CinemaElementList",
+    "inputs": {
+      "category": "all"
+    },
+    "_meta": {
+      "title": "SHOOT - read the Element registry for @tags"
+    }
+  },
+  "22b": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "22",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - Element registry summary (output node)"
+    }
+  },
+  "23": {
+    "class_type": "CinemaPromptCompose",
+    "inputs": {
+      "action": "PLACEHOLDER_ACTION_DID_NOT_RUN",
+      "panel_json": [
+        "19",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - compose prompt (@Element / #move)"
+    }
+  },
+  "23b": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "23",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - UNRESOLVED tags, reported not dropped (output node)"
+    }
+  },
+  "23c": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "23",
+        3
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - every @Element resolved? (output node)"
+    }
+  },
+  "24": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "32",
+        0
+      ],
+      "text": [
+        "23",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - LTX positive (composed prompt)"
+    }
+  },
+  "25": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "32",
+        0
+      ],
+      "text": "text, subtitles, logo, watermark, signature, still image, static"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX negative"
+    }
+  },
+  "26": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": [
+        "24",
+        0
+      ],
+      "negative": [
+        "25",
+        0
+      ],
+      "frame_rate": 24.0
+    },
+    "_meta": {
+      "title": "SHOOT - LTX conditioning"
+    }
+  },
+  "27": {
+    "class_type": "CinemaElementLoad",
+    "inputs": {
+      "name": "Mirror Dunes",
+      "category": "location"
+    },
+    "_meta": {
+      "title": "SHOOT - pre-flight: resolve the location Element before the shot"
+    }
+  },
+  "28": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "27",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - did the Element resolve? (output node)"
+    }
+  },
+  "29": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "12",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 960,
+      "height": 544,
+      "crop": "disabled"
+    },
+    "_meta": {
+      "title": "SHOOT - first frame, straight from BUILD (a STRING path cannot feed LoadImage.image)"
+    }
+  },
+  "30": {
+    "class_type": "LTXVPreprocess",
+    "inputs": {
+      "image": [
+        "29",
+        0
+      ],
+      "img_compression": 18
+    },
+    "_meta": {
+      "title": "SHOOT - LTXV preprocess"
+    }
+  },
+  "31": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX 2.5 transformer"
+    }
+  },
+  "32": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX 2.5 text encoder"
+    }
+  },
+  "33": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX 2.5 video VAE"
+    }
+  },
+  "34": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX 2.5 audio VAE"
+    }
+  },
+  "35": {
+    "class_type": "LatentUpscaleModelLoader",
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "_meta": {
+      "title": "SHOOT - LTX 2.5 latent upscaler"
+    }
+  },
+  "36": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 960,
+      "height": 544,
+      "length": 121,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "SHOOT - video latent (121 = 1 + 15*8)"
+    }
+  },
+  "37": {
+    "class_type": "LTXVEmptyLatentAudio",
+    "inputs": {
+      "frames_number": 121,
+      "frame_rate": 24.0,
+      "batch_size": 1,
+      "audio_vae": [
+        "34",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - audio latent"
+    }
+  },
+  "38": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": [
+        "33",
+        0
+      ],
+      "image": [
+        "30",
+        0
+      ],
+      "latent": [
+        "36",
+        0
+      ],
+      "strength": 0.7,
+      "bypass": false
+    },
+    "_meta": {
+      "title": "SHOOT - I2V stage 1 (strength 0.7)"
+    }
+  },
+  "39": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "38",
+        0
+      ],
+      "audio_latent": [
+        "37",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - concat AV (stage 1)"
+    }
+  },
+  "40": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 42
+    },
+    "_meta": {
+      "title": "SHOOT - noise (stage 1)"
+    }
+  },
+  "41": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "31",
+        0
+      ],
+      "positive": [
+        "26",
+        0
+      ],
+      "negative": [
+        "26",
+        1
+      ],
+      "cfg": 1.0
+    },
+    "_meta": {
+      "title": "SHOOT - guider (stage 1)"
+    }
+  },
+  "42": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "_meta": {
+      "title": "SHOOT - sampler (stage 1)"
+    }
+  },
+  "43": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "_meta": {
+      "title": "SHOOT - sigmas (stage 1, 8 steps)"
+    }
+  },
+  "44": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "40",
+        0
+      ],
+      "guider": [
+        "41",
+        0
+      ],
+      "sampler": [
+        "42",
+        0
+      ],
+      "sigmas": [
+        "43",
+        0
+      ],
+      "latent_image": [
+        "39",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - sample (stage 1)"
+    }
+  },
+  "45": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "44",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - split AV (stage 1)"
+    }
+  },
+  "46": {
+    "class_type": "LTXVLatentUpsampler",
+    "inputs": {
+      "samples": [
+        "45",
+        0
+      ],
+      "upscale_model": [
+        "35",
+        0
+      ],
+      "vae": [
+        "33",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - latent upsample x2"
+    }
+  },
+  "47": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": [
+        "33",
+        0
+      ],
+      "image": [
+        "30",
+        0
+      ],
+      "latent": [
+        "46",
+        0
+      ],
+      "strength": 1.0,
+      "bypass": false
+    },
+    "_meta": {
+      "title": "SHOOT - I2V stage 2 (strength 1.0)"
+    }
+  },
+  "48": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "47",
+        0
+      ],
+      "audio_latent": [
+        "45",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - concat AV (stage 2)"
+    }
+  },
+  "49": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 42
+    },
+    "_meta": {
+      "title": "SHOOT - noise (stage 2)"
+    }
+  },
+  "50": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "31",
+        0
+      ],
+      "positive": [
+        "26",
+        0
+      ],
+      "negative": [
+        "26",
+        1
+      ],
+      "cfg": 1.0
+    },
+    "_meta": {
+      "title": "SHOOT - guider (stage 2)"
+    }
+  },
+  "51": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "SHOOT - sampler (stage 2)"
+    }
+  },
+  "52": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "0.909375, 0.725, 0.421875, 0.0"
+    },
+    "_meta": {
+      "title": "SHOOT - sigmas (stage 2, 3 steps)"
+    }
+  },
+  "53": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "49",
+        0
+      ],
+      "guider": [
+        "50",
+        0
+      ],
+      "sampler": [
+        "51",
+        0
+      ],
+      "sigmas": [
+        "52",
+        0
+      ],
+      "latent_image": [
+        "48",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - sample (stage 2)"
+    }
+  },
+  "54": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "53",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - split AV (stage 2)"
+    }
+  },
+  "55": {
+    "class_type": "VAEDecodeTiled",
+    "inputs": {
+      "samples": [
+        "54",
+        0
+      ],
+      "vae": [
+        "33",
+        0
+      ],
+      "tile_size": 512,
+      "overlap": 64,
+      "temporal_size": 128,
+      "temporal_overlap": 32
+    },
+    "_meta": {
+      "title": "SHOOT - decode frames"
+    }
+  },
+  "56": {
+    "class_type": "LTXVAudioVAEDecode",
+    "inputs": {
+      "samples": [
+        "54",
+        1
+      ],
+      "audio_vae": [
+        "34",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SHOOT - decode audio"
+    }
+  },
+  "57": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "55",
+        0
+      ],
+      "audio": [
+        "56",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    },
+    "_meta": {
+      "title": "SHOOT - mux to video"
+    }
+  },
+  "58": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "57",
+        0
+      ],
+      "filename_prefix": "cinematographer/cinema_studio_full",
+      "format": "mp4",
+      "codec": "h264"
+    },
+    "_meta": {
+      "title": "SHOOT - save the render"
+    }
+  },
+  "59": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "{\"name\": \"Tamsin\", \"base\": [0.0, 0.0, 0.0], \"height\": 1.75, \"facing_yaw_deg\": 0.0}"
+    },
+    "_meta": {
+      "title": "JUDGE - subject (the character, in metres)"
+    }
+  },
+  "60": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "{\"angle\": \"eye\", \"side\": \"left\", \"center\": false, \"dutch_deg\": 0.0, \"azimuth_deg\": 30.0}"
+    },
+    "_meta": {
+      "title": "JUDGE - shot intent"
+    }
+  },
+  "61": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "[{\"shot_number\": 1, \"base\": [0.0, 0.0, 0.0], \"yaw_deg\": 0.0, \"camera\": {\"eye\": [-2.0, 1.66, 2.0], \"target\": [0.0, 1.66, 0.0]}}, {\"shot_number\": 2, \"base\": [0.0, 0.0, 0.0], \"yaw_deg\": 0.0, \"camera\": {\"eye\": [2.0, 1.66, 2.0], \"target\": [0.0, 1.66, 0.0]}}]"
+    },
+    "_meta": {
+      "title": "JUDGE - shot list for the continuity checks"
+    }
+  },
+  "62": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "{\"characters\": [], \"props\": []}"
+    },
+    "_meta": {
+      "title": "JUDGE - scene graph"
+    }
+  },
+  "63": {
+    "class_type": "CinematographerAutoFrame",
+    "inputs": {
+      "subject_json": [
+        "59",
+        0
+      ],
+      "shot_type": "medium",
+      "intent_json": [
+        "60",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - solve a compliant camera pose (24 iters)"
+    }
+  },
+  "64": {
+    "class_type": "CinematographerEvaluate",
+    "inputs": {
+      "subject_json": [
+        "59",
+        0
+      ],
+      "camera_json": [
+        "63",
+        0
+      ],
+      "shot_type": "medium",
+      "intent_json": [
+        "60",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - score the pose against the framing rules"
+    }
+  },
+  "65": {
+    "class_type": "CinematographerCorrection",
+    "inputs": {
+      "report_json": [
+        "64",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - correction levers, in metres"
+    }
+  },
+  "66": {
+    "class_type": "CameraReliabilityZone",
+    "inputs": {
+      "camera_json": [
+        "63",
+        0
+      ],
+      "subject_json": [
+        "59",
+        0
+      ],
+      "azimuth_deg": 30.0,
+      "elevation_deg": 10.0
+    },
+    "_meta": {
+      "title": "JUDGE - green/yellow/red reliability zone"
+    }
+  },
+  "67": {
+    "class_type": "SceneFramingExtras",
+    "inputs": {
+      "scene_json": [
+        "62",
+        0
+      ],
+      "camera_json": [
+        "63",
+        0
+      ],
+      "key_subject_json": [
+        "59",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - multi-entity rules"
+    }
+  },
+  "68": {
+    "class_type": "ChorosContinuity",
+    "inputs": {
+      "shots_json": [
+        "61",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - 180-degree / 30-degree continuity"
+    }
+  },
+  "69": {
+    "class_type": "CharacterContinuity",
+    "inputs": {
+      "shots_json": [
+        "61",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - appearance drift across the cut"
+    }
+  },
+  "70": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "64",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - verdict summary (output node)"
+    }
+  },
+  "71": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "65",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - CORRECTION IN METRES (output node; the verdict the app acts on)"
+    }
+  },
+  "72": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "66",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - reliability zone (output node)"
+    }
+  },
+  "73": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "67",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - multi-entity scores (output node)"
+    }
+  },
+  "74": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "68",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - continuity issues (output node)"
+    }
+  },
+  "75": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "69",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "JUDGE - character drift report (output node)"
+    }
+  },
+  "76": {
+    "class_type": "CinemaGrade",
+    "inputs": {
+      "temperature": 0.15,
+      "contrast": 0.1,
+      "saturation": -0.05,
+      "sharpness": 0.0,
+      "film_grain": 0.2,
+      "highlights": -0.1,
+      "exposure": 0.0,
+      "corrections": [
+        "65",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "POST - grade PLAN, GATED by the judge's verdict (corrections)"
+    }
+  },
+  "76b": {
+    "class_type": "CinemaGradeApply",
+    "inputs": {
+      "image": [
+        "55",
+        0
+      ],
+      "grade_json": [
+        "76",
+        0
+      ],
+      "seed": 42
+    },
+    "_meta": {
+      "title": "POST - APPLY the grade to the rendered frames (the only pixel-changing node)"
+    }
+  },
+  "76c": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "76b",
+        0
+      ],
+      "filename_prefix": "cinematographer/cinema_studio_full_graded"
+    },
+    "_meta": {
+      "title": "POST - write the graded frame"
+    }
+  },
+  "76d": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "76b",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "POST - grade-apply summary (output node)"
+    }
+  },
+  "77": {
+    "class_type": "CinemaExtend",
+    "inputs": {
+      "mode": "sequel",
+      "duration_s": 5.0,
+      "overlap_frames": 8
+    },
+    "_meta": {
+      "title": "POST - extend PLAN (sequel, 5 s)"
+    }
+  },
+  "78": {
+    "class_type": "CinemaEdit",
+    "inputs": {
+      "label": "background",
+      "bbox_min_x": -1.0,
+      "bbox_min_y": 0.0,
+      "bbox_max_x": 1.0,
+      "bbox_max_y": 1.0,
+      "prompt": "PLACEHOLDER_EDIT_INSTRUCTION_DID_NOT_RUN"
+    },
+    "_meta": {
+      "title": "POST - regional edit PLAN"
+    }
+  },
+  "79": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "76",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "POST - grade plan (output node)"
+    }
+  },
+  "80": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "77",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "POST - extend plan (output node)"
+    }
+  },
+  "81": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "78",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "POST - edit plan (output node)"
+    }
+  }
+}

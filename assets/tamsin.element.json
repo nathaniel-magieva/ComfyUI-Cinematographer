@@ -1,0 +1,10 @@
+{
+  "name": "Tamsin",
+  "category": "character",
+  "asset_path": "assets/tamsin.png",
+  "description": "lead",
+  "seed": 7,
+  "palette": [],
+  "bbox": null,
+  "created_utc": ""
+}

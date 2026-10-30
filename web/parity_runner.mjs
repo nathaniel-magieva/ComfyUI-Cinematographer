@@ -21,6 +21,7 @@ import {
   shotIntent,
   subject,
 } from './cinematographer.js';
+import * as DIR from './director.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixturesPath = process.argv[2] ? resolve(process.argv[2]) : resolve(HERE, 'parity_fixtures.json');
@@ -30,7 +31,7 @@ const asSubject = (d) => subject(d);
 const asCamera = (d) => camPose(d);
 const asIntent = (d) => shotIntent(d);
 
-const out = { framing: [], continuity: [], reliability: [], autoframe: [] };
+const out = { framing: [], continuity: [], reliability: [], autoframe: [], director: { enums: [], credits: [] } };
 
 for (const fx of fixtures.framing) {
   const rep = evaluateFraming(
@@ -66,6 +67,32 @@ for (const fx of fixtures.reliability) {
 for (const fx of fixtures.autoframe) {
   const res = autoFrameCamera(asSubject(fx.subject), fx.shot_type, asIntent(fx.intent));
   out.autoframe.push({ id: fx.id, actual: res });
+}
+
+// --- Director's Panel -------------------------------------------------------
+// The enums are compared verbatim; the credit cells are compared against the
+// published table, which is an external fact rather than a value this code
+// computed for itself.
+
+for (const fx of fixtures.director.enums) {
+  const values = DIR.ENUMS[fx.enum];
+  out.director.enums.push({
+    id: fx.id,
+    enum: fx.enum,
+    actual: values ? [...values] : null,
+  });
+}
+
+for (const fx of fixtures.director.credits) {
+  const cost = DIR.estimateCredits({ duration: fx.duration, resolution: fx.resolution });
+  out.director.credits.push({
+    id: fx.id,
+    // `list` is the published table price; `current` may carry the documented
+    // limited-time 1080p launch discount.
+    actual: cost.list,
+    current: cost.current,
+    discounted: cost.discounted,
+  });
 }
 
 process.stdout.write(JSON.stringify(out));

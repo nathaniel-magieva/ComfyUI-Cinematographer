@@ -1,7 +1,7 @@
 {
   "meta": {
     "generated_by": "web/tools/gen_fixtures.py",
-    "generated_at": "2026-10-30T02:24:43+00:00",
+    "generated_at": "2026-10-30T03:36:57+00:00",
     "engine": "cinematographer/ (Python)",
     "engine_revision": "unknown",
     "engine_hash_sha256": "d93581b30ce0a7c1e4ce499d18937d1d74e58717afcc28a6cddea5ce66add532",
@@ -2550,5 +2550,316 @@
         "residual": []
       }
     }
-  ]
+  ],
+  "director": {
+    "meta": {
+      "enum_source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+      "credit_source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release",
+      "python_module": "cinematographer/director.py",
+      "python_present": true,
+      "capture_verified": true,
+      "notes": [
+        "cinematographer/director.py present \u2014 cross-checked"
+      ]
+    },
+    "enums": [
+      {
+        "id": "enum_genre",
+        "enum": "genre",
+        "values": [
+          "epic",
+          "drama",
+          "noir",
+          "comedy",
+          "horror",
+          "action"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_era",
+        "enum": "era",
+        "values": [
+          "1960s",
+          "1980s",
+          "1990s",
+          "2000s",
+          "2020s"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_pacing",
+        "enum": "pacing",
+        "values": [
+          "chaotic",
+          "dynamic",
+          "calm",
+          "single-shot"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_camera_model",
+        "enum": "camera_model",
+        "values": [
+          "modern",
+          "35mm-film",
+          "8mm-film",
+          "dv-camcorder"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_camera_lens",
+        "enum": "camera_lens",
+        "values": [
+          "clean-sharp",
+          "anamorphic",
+          "vintage-anamorphic",
+          "warm-vintage",
+          "halation-vintage"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_camera_aperture",
+        "enum": "camera_aperture",
+        "values": [
+          "f14-wide-open",
+          "f4-moderate",
+          "f11-deep-focus"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_camera_movement",
+        "enum": "camera_movement",
+        "values": [
+          "snorricam",
+          "robot-arm",
+          "tilt-up",
+          "rack-focus",
+          "tilt-down",
+          "pov",
+          "pan-left",
+          "crane-up",
+          "pan-right",
+          "crane-down",
+          "side-tracking",
+          "pedestal-up",
+          "pedestal-down",
+          "handheld",
+          "tracking",
+          "drone-orbit",
+          "dolly-zoom",
+          "aerial-pullback",
+          "static-shot",
+          "bullet-time",
+          "whip-pan",
+          "slow-zoom-in",
+          "arc-left",
+          "slow-zoom-out",
+          "arc-right",
+          "truck-right",
+          "dolly-in",
+          "truck-left",
+          "dolly-out",
+          "slider-right",
+          "crush-zoom",
+          "slider-left",
+          "helicopter-shot"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_light",
+        "enum": "light",
+        "values": [
+          "silhouette",
+          "practicals",
+          "window",
+          "overhead-fall",
+          "contre-jour",
+          "soft-cross"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_color_palette",
+        "enum": "color_palette",
+        "values": [
+          "static-noon",
+          "twilight-fable",
+          "back-row-kissing-seats",
+          "on-the-other-side-of-the-porthole",
+          "the-emerald-ambush",
+          "highway-standoff",
+          "the-faded-fresco",
+          "oil-ochre",
+          "the-mountain-convent",
+          "ghost-in-the-code",
+          "pink-velvet",
+          "two-days-to-the-horizon",
+          "industrial-fog",
+          "stairs-go-up",
+          "field-post",
+          "home-is-the-next-gas-station",
+          "glossy-flesh",
+          "the-crimson-ballet",
+          "neon-rain-at-midnight",
+          "the-morning-after-rain",
+          "the-iron-borough",
+          "the-ground",
+          "the-investigation",
+          "turquoise-mirage",
+          "a-dream-in-color",
+          "breakfast-on-schedule",
+          "favela-gold",
+          "a-hotel-for-one",
+          "after-dark",
+          "crimson-vigi",
+          "the-neighbors-saw-everything",
+          "the-grey-channel",
+          "mirage-at-noon",
+          "bubblegum-boulevard",
+          "yellow-room",
+          "the-earth-keeps-things-reluctantly",
+          "tropic-fever-dream",
+          "bioluminescent-night",
+          "dont-turn-it-off-im-watching",
+          "the-silk-curtain-falls",
+          "the-butterfly",
+          "playtime",
+          "wallpaper-romance",
+          "overtime",
+          "the-way-home-is-longer",
+          "everyone-speaks-in-whispers",
+          "runaway-summer",
+          "amber-wasteland",
+          "the-circus",
+          "gasoline-sunset"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_aspect_ratio",
+        "enum": "aspect_ratio",
+        "values": [
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16",
+          "21:9"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true
+      },
+      {
+        "id": "enum_emotion",
+        "enum": "emotion",
+        "values": [
+          "sadness",
+          "fear",
+          "anger",
+          "joy",
+          "trust",
+          "disgust",
+          "surprise",
+          "interest",
+          "hope"
+        ],
+        "source": "Emotion wheel: union of the on-screen wheel (V3) and the settings reference, which differ by Interest vs Hope. No API `emotion` field exists.",
+        "api_backed": false
+      },
+      {
+        "id": "enum_resolution",
+        "enum": "resolution",
+        "values": [
+          "480p",
+          "720p"
+        ],
+        "source": "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29",
+        "api_backed": true,
+        "ui_only": [
+          "1080p"
+        ]
+      }
+    ],
+    "credits": [
+      {
+        "id": "credit_10s_480p",
+        "duration": 10,
+        "resolution": "480p",
+        "expected_credits": 30,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_15s_480p",
+        "duration": 15,
+        "resolution": "480p",
+        "expected_credits": 45,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_30s_480p",
+        "duration": 30,
+        "resolution": "480p",
+        "expected_credits": 90,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_10s_720p",
+        "duration": 10,
+        "resolution": "720p",
+        "expected_credits": 70,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_15s_720p",
+        "duration": 15,
+        "resolution": "720p",
+        "expected_credits": 105,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_30s_720p",
+        "duration": 30,
+        "resolution": "720p",
+        "expected_credits": 210,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_10s_1080p",
+        "duration": 10,
+        "resolution": "1080p",
+        "expected_credits": 160,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_15s_1080p",
+        "duration": 15,
+        "resolution": "1080p",
+        "expected_credits": 240,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      },
+      {
+        "id": "credit_30s_1080p",
+        "duration": 30,
+        "resolution": "1080p",
+        "expected_credits": 480,
+        "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      }
+    ]
+  }
 }

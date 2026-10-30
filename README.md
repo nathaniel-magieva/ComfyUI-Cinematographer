@@ -49,13 +49,23 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 > `FileNotFoundError: '<dir>/__init__.py'`.
 >
 > Verified by replaying ComfyUI's exact loader (`os.listdir` with no recursion, then
-> `spec_from_file_location(pack_root/__init__.py)`) against a clean copy: 6 nodes load.
+> `spec_from_file_location(pack_root/__init__.py)`) against a clean copy: 18 nodes load.
 
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 100 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 884 tests, all hand-computed expected values
 ```
+
+One test module needs numpy, because one node does. It is imported lazily inside
+that node, so the pack still imports without numpy and only `CinemaGradeApply`
+fails at execution time. The test module matches that tolerance with
+`pytest.importorskip`, so on a stdlib-only interpreter you get
+**804 passed, 1 skipped** rather than a collection error that hides the other 800.
+
+**Name the interpreter when you quote a total.** 884 and 804 are the same tree: the
+80-test difference is exactly `tests/test_nodes_grade_apply.py`, which is numpy-gated.
+The skip is loud and carries its reason, not a silent zero.
 
 The engine imports with **zero ComfyUI dependency** — that is a deliberate design constraint, so
 the geometry is testable and reusable outside ComfyUI.
@@ -135,14 +145,22 @@ list of what is mocked.
 
 ## The workflows
 
-Two ready-to-load graphs live in [`workflows/`](workflows/):
+Six ready-to-load graphs live in [`workflows/`](workflows/):
 
 | Graph | Stack | Licence |
 |---|---|---|
+| `cinema_studio_full.json` | The whole flow: Flux.1 [schnell] → Elements → Director → LTX 2.5 → judge → post | Apache-2.0 |
+| `reshoot_ltx25.json` | LTX 2.5 (official two-stage distilled, flattened) | LTX Community |
 | `reshoot_ltx_crossview.json` | LTX 2.3 + CrossView-Warp IC-LoRA + MoGe-2 | LTX Community / Apache-2.0 |
+| `reshoot_ltx23_character.json` | As above, plus a character LoRA | LTX Community / Apache-2.0 |
 | `reshoot_wan22_fun_control.json` | Wan 2.2 Fun-Control | Apache-2.0 |
+| `character_lora_train.json` | Native ComfyUI LoRA training on the LTX 2.3 transformer | Apache-2.0 |
 
-Both are **structurally validated and neither has been executed**:
+`cinema_studio_full.json` is the entry: it runs the five stages end to end and needs **no custom
+node packs at all** beyond this one. The rest are the individual stacks, so you can swap the video
+model under the same directorial controls.
+
+All six are **structurally validated and none has been executed**:
 
 ```bash
 python workflows/validate_graphs.py

@@ -169,8 +169,245 @@ try {
   await send('Page.navigate', { url: URL_ });
   await waitFor('document.readyState === "complete"', 'page load');
   await waitFor('document.querySelectorAll("#rules .rule").length === 9', 'rule panel');
+  await waitFor('document.querySelectorAll("#d-move-add option").length > 0', 'director controls');
 
-  console.log('[1] first paint');
+  // ===================== DIRECTOR TAB (the default) =====================
+  console.log('[D1] Director tab is the default');
+  const tabState = await evaluate(`(() => ({
+    directorHidden: document.getElementById('tab-director').classList.contains('hidden'),
+    judgeHidden: document.getElementById('tab-judge').classList.contains('hidden'),
+    onTab: document.querySelector('#tabnav .tab.on')?.dataset.tab,
+    note: document.getElementById('tabnav-note').textContent.trim(),
+  }))()`);
+  ok(!tabState.directorHidden, 'the Director tab is visible on load');
+  ok(tabState.judgeHidden, 'the Judge tab starts hidden');
+  ok(tabState.onTab === 'director', 'the Director tab button is selected', tabState.onTab);
+  ok(/does not generate/.test(tabState.note), 'the tab bar says the panel does not generate', tabState.note);
+
+  const panelErrors = await evaluate('JSON.stringify(window.__panelErrors || [])');
+  ok(panelErrors === '[]', 'the page booted with no JS errors', panelErrors);
+
+  console.log('\n[D2] every dropdown is populated from the engine constants');
+  const enumMismatch = await evaluate(`(() => {
+    const D = window.__cinematographer.director;
+    const pairs = [
+      ['d-genre','genre'], ['d-era','era'], ['d-pacing','pacing'],
+      ['d-model','camera_model'], ['d-lens','camera_lens'], ['d-aperture','camera_aperture'],
+      ['d-light','light'], ['d-palette','color_palette'],
+      ['d-resolution','resolution'], ['d-aspect','aspect_ratio'],
+      ['d-emo-emotion','emotion'],
+    ];
+    const bad = [];
+    for (const [id, key] of pairs) {
+      const sel = document.getElementById(id);
+      if (!sel) { bad.push(id + ': missing'); continue; }
+      const got = [...sel.options].map(o => o.value).filter(v => v !== 'auto');
+      const want = D.ENUMS[key];
+      if (got.join('|') !== want.join('|')) {
+        bad.push(id + ': got ' + got.length + ' want ' + want.length);
+      }
+    }
+    // The move picker is grouped into families for usability, so its DOM order is
+    // the group order. Compare it as a set: same members, no drift, no extras.
+    const mv = [...document.querySelectorAll('#d-move-add option')].map(o => o.value);
+    const mvSet = [...mv].sort().join('|');
+    const wantSet = [...D.CAMERA_MOVEMENT].sort().join('|');
+    if (mvSet !== wantSet) {
+      bad.push('d-move-add: got ' + mv.length + ' want ' + D.CAMERA_MOVEMENT.length +
+        (mv.length === D.CAMERA_MOVEMENT.length ? ' (same size, different members)' : ''));
+    }
+    return bad;
+  })()`);
+  ok(enumMismatch.length === 0, 'all 13 selects match the engine enums exactly', enumMismatch.join('; ') || 'no drift');
+  const enumCounts = await evaluate(`(() => {
+    const D = window.__cinematographer.director;
+    return Object.entries(D.ENUMS).map(([k, v]) => k + '=' + v.length).join(' ');
+  })()`);
+  console.log(`  info enum sizes: ${enumCounts}`);
+
+  console.log('\n[D3] the move stack is ordered and reorderable');
+  await evaluate(`(() => {
+    const add = (slug) => {
+      const sel = document.getElementById('d-move-add');
+      sel.value = slug;
+      document.getElementById('d-move-add-btn').click();
+    };
+    add('dolly-in'); add('crane-up'); add('pan-left');
+    return true;
+  })()`);
+  await sleep(200);
+  const stackBefore = await evaluate(
+    '[...document.querySelectorAll("#d-move-stack .mv-tag")].map(e => e.textContent).join(",")',
+  );
+  ok(stackBefore === '#dolly-in,#crane-up,#pan-left', 'three moves stack in the order added', stackBefore);
+  await evaluate(`(() => {
+    const rows = document.querySelectorAll('#d-move-stack .move-row');
+    rows[0].querySelectorAll('button')[1].click();  // the "move later" button
+    return true;
+  })()`);
+  await sleep(200);
+  const stackAfter = await evaluate(
+    '[...document.querySelectorAll("#d-move-stack .mv-tag")].map(e => e.textContent).join(",")',
+  );
+  ok(stackAfter === '#crane-up,#dolly-in,#pan-left', 'reordering the stack changes the run order', stackAfter);
+  const promptMoves = await evaluate('document.getElementById("d-prompt-out").textContent');
+  ok(
+    promptMoves.includes('#crane-up #dolly-in #pan-left'),
+    'the composed prompt carries the moves in stack order',
+    promptMoves.trim().slice(-40),
+  );
+
+  console.log('\n[D4] @Element and #move resolve live');
+  await evaluate(`(() => {
+    const ta = document.getElementById('d-prompt');
+    ta.value = 'A detective crosses the diner, @tamsincamp waits, @nobody watches, #dolly-in then #dollyin';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  await sleep(250);
+  const chips = await evaluate(`(() => {
+    const all = [...document.querySelectorAll('#d-tags .tag-chip')];
+    return {
+      total: all.length,
+      ok: all.filter(c => c.classList.contains('ok')).length,
+      bad: all.filter(c => c.classList.contains('bad')).length,
+      badText: all.filter(c => c.classList.contains('bad')).map(c => c.textContent.trim()).join(' | '),
+    };
+  })()`);
+  ok(chips.total === 4, 'four tags are recognised', `${chips.total}`);
+  ok(chips.ok === 2, 'the two valid tags resolve', `${chips.ok} resolved`);
+  ok(chips.bad === 2, 'the two invalid tags are flagged red', chips.badText);
+  const composed = await evaluate('document.getElementById("d-prompt-out").textContent');
+  ok(
+    composed.includes('<<<image_1>>>'),
+    '@Element is translated to the API reference token',
+    composed.trim().slice(0, 60),
+  );
+  const attachments = await evaluate(
+    '[...document.querySelectorAll("#d-attachments .attach-item")].map(e => e.textContent).join(" | ")',
+  );
+  ok(/tamsincamp/.test(attachments), 'the attachment list names the resolved Element', attachments);
+
+  console.log('\n[D5] the cost readout follows duration and resolution');
+  const costAt = async (duration, resolution) => {
+    await evaluate(`(() => {
+      const d = document.getElementById('d-duration');
+      d.value = '${duration}';
+      d.dispatchEvent(new Event('input', { bubbles: true }));
+      const r = document.getElementById('d-resolution');
+      r.value = '${resolution}';
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await sleep(180);
+    return evaluate('document.getElementById("d-cost").textContent.replace(/\\s+/g, " ").trim()');
+  };
+  const c10_720 = await costAt(10, '720p');
+  ok(c10_720 === '✦ 70', '10 s at 720p costs 70 credits (published cell)', c10_720);
+  await costAt(30, '1080p');
+  const c30_1080 = await evaluate(`(() => {
+    const el = document.getElementById('d-cost');
+    return {
+      text: el.textContent.replace(/\\s+/g, ' ').trim(),
+      was: el.querySelector('.was') ? el.querySelector('.was').textContent.trim() : null,
+    };
+  })()`);
+  ok(
+    c30_1080.was === '✦ 480' && c30_1080.text.includes('✦ 360'),
+    '30 s at 1080p shows 480 struck and 360 discounted',
+    `was=${c30_1080.was} now=${c30_1080.text}`,
+  );
+  const c4_480 = await costAt(4, '480p');
+  ok(c4_480 === '✦ 12', '4 s at 480p costs 12 credits (3 credits/s)', c4_480);
+  const c15_720 = await costAt(15, '720p');
+  ok(c15_720 === '✦ 105', '15 s at 720p costs 105 credits (published cell)', c15_720);
+  const genDisabled = await evaluate('document.getElementById("d-generate").disabled');
+  ok(genDisabled === true, 'the Generate button is disabled — the panel composes, it does not send');
+
+  console.log('\n[D5b] focal length — the control 4.0 dropped and this engine kept');
+  const focalMeta = await evaluate(`(() => {
+    const D = window.__cinematographer.director;
+    const f = document.getElementById('d-focal');
+    return {
+      dropped: D.FOCAL_LENGTH_DROPPED_IN_4_0,
+      min: f.min, max: f.max, value: f.value,
+      wantMin: String(D.FOCAL_MIN), wantMax: String(D.FOCAL_MAX),
+      inApiFields: Object.values(D.API_FIELDS).includes('focal_mm'),
+    };
+  })()`);
+  ok(focalMeta.dropped === true, 'the engine records that 4.0 dropped focal length');
+  ok(
+    focalMeta.min === focalMeta.wantMin && focalMeta.max === focalMeta.wantMax,
+    'the focal slider spans the engine range',
+    `${focalMeta.min}–${focalMeta.max} mm`,
+  );
+  ok(!focalMeta.inApiFields, 'focal_mm is not claimed as an API field');
+  await evaluate(`(() => {
+    const f = document.getElementById('d-focal');
+    f.value = '85';
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  await sleep(200);
+  const focalPlan = await evaluate(`(() => ({
+    ext: document.getElementById('d-extensions').textContent,
+    params: document.getElementById('d-params').textContent,
+    out: document.getElementById('d-focal-out').textContent,
+  }))()`);
+  ok(focalPlan.out === '85 mm', 'the focal readout follows the slider', focalPlan.out);
+  ok(/"focal_mm": 85/.test(focalPlan.ext), 'focal length lands in the engine-extension block', focalPlan.ext.split('\n')[1]);
+  ok(!/focal_mm/.test(focalPlan.params), 'focal length is NOT in the API parameter block');
+
+  console.log('\n[D5c] emotion wheel — 9 names, continuous intensity');
+  const emo = await evaluate(`(() => {
+    const D = window.__cinematographer.director;
+    const sel = document.getElementById('d-emo-emotion');
+    const it = document.getElementById('d-emo-intensity');
+    return {
+      names: [...sel.options].map(o => o.value).join('|'),
+      want: D.EMOTION.join('|'),
+      sliderType: it.type, min: it.min, max: it.max,
+      isEnum: 'emotion_intensity' in D.ENUMS,
+    };
+  })()`);
+  ok(emo.names === emo.want, 'the emotion wheel lists all 9 names from the engine', `${emo.names.split('|').length} names`);
+  ok(
+    emo.sliderType === 'range' && emo.min === '0' && emo.max === '1',
+    'intensity is a continuous 0..1 slider, not an invented enum',
+    `${emo.sliderType} ${emo.min}–${emo.max}`,
+  );
+  ok(!emo.isEnum, 'intensity is not exposed as an enum');
+  await evaluate(`(() => {
+    const it = document.getElementById('d-emo-intensity');
+    it.value = '1';
+    it.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('d-emo-add').click();
+    return true;
+  })()`);
+  await sleep(200);
+  const emoRow = await evaluate(
+    'document.querySelector("#d-emo-list .mv-name")?.textContent.trim() ?? ""',
+  );
+  ok(/intense/.test(emoRow) && /1\.00/.test(emoRow), 'an emotion row records the intensity', emoRow);
+
+  console.log('\n[D6] Director tab screenshot');
+  const shotD = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  const SHOT_DIRECTOR = SHOT.replace(/\.png$/, '-director.png');
+  writeFileSync(SHOT_DIRECTOR, Buffer.from(shotD.data, 'base64'));
+  ok(existsSync(SHOT_DIRECTOR), 'Director tab screenshot written', SHOT_DIRECTOR);
+
+  // ===================== JUDGE TAB (unchanged) =====================
+  console.log('\n[J0] switching to the Judge tab');
+  await evaluate(`document.querySelector('#tabnav [data-tab="judge"]').click(), true`);
+  await sleep(400);
+  const judgeVisible = await evaluate(`(() => ({
+    judgeHidden: document.getElementById('tab-judge').classList.contains('hidden'),
+    directorHidden: document.getElementById('tab-director').classList.contains('hidden'),
+  }))()`);
+  ok(!judgeVisible.judgeHidden, 'the Judge tab becomes visible');
+  ok(judgeVisible.directorHidden, 'the Director tab hides');
+
+  console.log('\n[1] first paint');
   const names = await evaluate(
     '[...document.querySelectorAll("#rules .rule-name")].map(e => e.textContent).join(",")',
   );

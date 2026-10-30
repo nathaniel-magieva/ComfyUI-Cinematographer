@@ -29,6 +29,7 @@ from cinematographer.continuity import (
     MIN_ANGLE_CHANGE_DEG,
     ContinuityShot,
     ang_delta,
+    axis_side,
     evaluate_continuity,
 )
 from cinematographer.framing import evaluate_framing
@@ -38,6 +39,7 @@ from cinematographer.geometry import (
     ShotIntent,
     Subject,
     headroom_band,
+    shot_size_band,
     shot_size_ok,
 )
 
@@ -224,6 +226,33 @@ def test_shot_size_band_edges(shot_type, frac, expected):
     """
     ok, _ = shot_size_ok(frac, shot_type)
     assert ok is expected, f"{shot_type} at {frac} should be {expected}"
+
+
+@pytest.mark.parametrize(
+    "shot_type,lo,hi",
+    [("closeup", 0.7, None), ("medium", 0.4, 0.75), ("wide", 0.15, 0.45)],
+)
+def test_shot_size_band_edges_are_exact(shot_type, lo, hi):
+    """The band edges are *exactly* these numbers, not merely near them.
+
+    The parametrisation above probes 0.41 / 0.71 / 0.16 — one hundredth inside each
+    edge. That is enough to catch a gross error but **not** enough to catch the edge
+    moving by one hundredth: ``0.4 -> 0.41`` still passes a probe at 0.41, and the
+    same is true of ``0.7 -> 0.71`` and ``0.15 -> 0.16``. A mutation replay found
+    exactly those three survivors.
+
+    So probe the edge itself and the smallest representable step below it. The
+    constants are compared with ``==`` rather than ``approx`` on purpose: the point
+    is to pin the literal, and a tolerance would reintroduce the blind spot.
+    """
+    assert shot_size_band(shot_type)[0] == lo
+    assert shot_size_band(shot_type)[1] == hi
+    # The edge is inclusive, and one ulp below it is not.
+    assert shot_size_ok(lo, shot_type)[0] is True
+    assert shot_size_ok(math.nextafter(lo, 0.0), shot_type)[0] is False
+    if hi is not None:
+        assert shot_size_ok(hi, shot_type)[0] is True
+        assert shot_size_ok(math.nextafter(hi, 1.0), shot_type)[0] is False
 
 
 # --------------------------------------------------------------------------
@@ -413,15 +442,22 @@ def test_thirty_degree_rule_edges():
 def test_ang_delta_wraps_at_180_not_179():
     """``ang_delta`` returns the *smallest* angle, so 350 deg apart is 10 deg.
 
-    Constrains the wrap. If the wrap moved to 179, ``ang_delta(0, 180)`` would
-    return 180 rather than 180 (unchanged) but ``ang_delta(0, 181)`` would return
-    181 instead of 179 — the assert below catches that.
+    Constrains the wrap. The discriminating input is **179.5**, not 180 or 181:
+    under a correct wrap ``ang_delta(0, 179.5) == 179.5``, and under a wrap that
+    moved to 179 it returns ``181.0``. Probing 180 and 181 alone does not separate
+    the two — both give 180 and 179 either way — which is how a mutation replay
+    walked past this test. The half-degree case is the one that pins it.
     """
     assert ang_delta(0.0, 10.0) == pytest.approx(10.0)
     assert ang_delta(0.0, 350.0) == pytest.approx(10.0)
     assert ang_delta(0.0, 180.0) == pytest.approx(180.0)
     assert ang_delta(0.0, 181.0) == pytest.approx(179.0)
     assert ang_delta(0.0, 359.0) == pytest.approx(1.0)
+    # The wrap boundary itself, from both sides.
+    assert ang_delta(0.0, 179.5) == pytest.approx(179.5)
+    assert ang_delta(0.0, 180.5) == pytest.approx(179.5)
+    assert ang_delta(0.0, 179.0) == pytest.approx(179.0)
+    assert ang_delta(0.0, 181.0) == pytest.approx(179.0)
 
 
 def test_axis_side_sign_is_stable():
@@ -429,6 +465,13 @@ def test_axis_side_sign_is_stable():
 
     Constrains the axis sign. Flipping it inverts every 180_axis verdict, which
     this catches because the two shots below are deliberately on the same side.
+
+    The relative assertions below are necessary but **not sufficient**: they hold
+    under a global sign flip, because flipping the sign swaps which of the two
+    cases passes without changing that exactly one of them does. A mutation replay
+    confirmed that. So the absolute sign is pinned too — ``axis_side`` for a camera
+    at +X must be the *same* value for both shots and must differ from the camera at
+    -X. That is what makes the flip detectable.
     """
     def shot(n, eye_x):
         return ContinuityShot(
@@ -442,3 +485,14 @@ def test_axis_side_sign_is_stable():
     crossed = evaluate_continuity([shot(1, 1.0), shot(2, -2.0)])
     assert [i.passed for i in same_side if i.rule == "180_axis"] == [True]
     assert [i.passed for i in crossed if i.rule == "180_axis"] == [False]
+
+    # Absolute sign: +X and -X must land on opposite sides, and the side of +X must
+    # be a fixed value rather than merely "consistent with itself".
+    # ``axis_side`` takes (base, yaw_deg, eye), not a ContinuityShot.
+    base = (0.0, 0.0, 0.0)
+    pos = axis_side(base, 0.0, (1.0, 1.656, 3.0))
+    pos_far = axis_side(base, 0.0, (2.0, 1.656, 3.0))
+    neg = axis_side(base, 0.0, (-2.0, 1.656, 3.0))
+    assert pos == pos_far, "two cameras on the same side must report the same side"
+    assert pos != neg, "cameras on opposite sides must report opposite sides"
+    assert pos == 1, f"a camera at +X must report side +1, got {pos!r}"

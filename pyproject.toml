@@ -33,10 +33,18 @@ classifiers = [
     "Topic :: Multimedia :: Graphics :: 3D Rendering",
 ]
 
-# The engine (geometry, framing, scene, continuity, autoframe, reliability) is
-# stdlib-only by design: it is pure arithmetic over metres and degrees. ComfyUI
+# The engine -- geometry, framing, scene, continuity, character, autoframe,
+# reliability, elements, post, director, prompt -- is stdlib-only by design: it
+# is pure arithmetic and string handling over metres, degrees and tags. ComfyUI
 # is NOT a pip dependency -- it is the host application, and the node pack
 # imports cleanly without it.
+#
+# numpy is deliberately NOT declared here even though CinemaGradeApply -- the
+# one node that changes pixels -- needs it at execution time. ComfyUI already
+# ships numpy, and declaring it would let pip install a second copy into a
+# ComfyUI environment, which is a well-known way to break the host. It is
+# imported lazily inside that node, so the package still imports without it.
+# Use the `grade` extra to run that node outside ComfyUI.
 dependencies = []
 
 [project.urls]
@@ -45,7 +53,14 @@ Repository = "https://github.com/nathaniel-magieva/ComfyUI-Cinematographer"
 Issues = "https://github.com/nathaniel-magieva/ComfyUI-Cinematographer/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+# numpy is in `dev` as well as `grade`, and deliberately so: without it
+# tests/test_nodes_grade_apply.py skips at module scope, so a dev environment
+# without numpy reports a smaller total than the tree actually has. The skip is
+# loud and carries its reason, but a test that never runs is not a test. Install
+# `.[dev]` and the whole suite runs.
+dev = ["pytest>=7.0", "numpy>=1.20"]
+# Only needed to run CinemaGradeApply outside ComfyUI; ComfyUI ships numpy.
+grade = ["numpy>=1.20"]
 
 [tool.setuptools]
 packages = ["cinematographer"]

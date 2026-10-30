@@ -362,13 +362,32 @@ def headroom_band(shot_type: str) -> tuple[float, float]:
     return 0.10, 0.45
 
 
+def shot_size_band(shot_type: str) -> tuple[float, float | None]:
+    """The subject-height fraction band for a shot type, as ``(lo, hi)``.
+
+    ``hi`` is ``None`` for ``closeup``, which is one-sided (``frac >= 0.7``): there
+    is no upper bound on how much of the frame the subject may fill.
+
+    This is the single source for the three bands. ``shot_size_ok`` reads it, so the
+    predicate and the published band cannot drift apart — before this existed the
+    literals were inlined in ``shot_size_ok`` and a test that wanted to assert the
+    band had to restate them, which is how a test ends up agreeing with a bug.
+    """
+    if shot_type == "closeup":
+        return 0.7, None
+    if shot_type == "wide":
+        return 0.15, 0.45
+    return 0.4, 0.75
+
+
 def shot_size_ok(frac: float, shot_type: str) -> tuple[bool, str]:
     """Target strings match the Go source verbatim so the differential check is exact."""
+    lo, hi = shot_size_band(shot_type)
     if shot_type == "closeup":
-        return frac >= 0.7, "subject \u226570% of frame height (CU)"
+        return frac >= lo, "subject \u226570% of frame height (CU)"
     if shot_type == "wide":
-        return 0.15 <= frac <= 0.45, "subject 15\u201345% of frame height (WS)"
-    return 0.4 <= frac <= 0.75, "subject 40\u201375% of frame height (MS)"
+        return lo <= frac <= hi, "subject 15\u201345% of frame height (WS)"
+    return lo <= frac <= hi, "subject 40\u201375% of frame height (MS)"
 
 
 def size_target_mid(shot_type: str) -> float:

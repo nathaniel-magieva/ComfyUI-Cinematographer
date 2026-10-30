@@ -20,7 +20,7 @@ the pack one level down (``<dir>/app/__init__.py``) fails with
 
 Verified by replaying ComfyUI's exact loader (``os.listdir`` with no recursion, then
 ``spec_from_file_location(pack_root/__init__.py)``) against a clean copy: this layout
-loads 6 nodes. See ``README.md`` for the same note in install form.
+loads 18 nodes. See ``README.md`` for the same note in install form.
 """
 
 import os

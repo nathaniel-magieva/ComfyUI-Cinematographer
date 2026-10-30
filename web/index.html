@@ -32,7 +32,224 @@
   </div>
 </header>
 
-<main class="layout">
+<nav class="tabnav" id="tabnav" role="tablist" aria-label="Panel mode">
+  <button class="tab on" data-tab="director" role="tab" aria-selected="true" type="button">
+    Director <span class="tab-sub">sets the parameters</span>
+  </button>
+  <button class="tab" data-tab="judge" role="tab" aria-selected="false" type="button">
+    Judge <span class="tab-sub">measures the frame</span>
+  </button>
+  <span class="tabnav-note" id="tabnav-note">
+    The Director tab composes a plan. It does not generate anything.
+  </span>
+</nav>
+
+<main>
+
+<!-- ===================== TAB 1: DIRECTOR (default) ====================== -->
+<div id="tab-director" class="tabpanel">
+
+  <section class="card prompt-card">
+    <div class="card-head">
+      <h2>Prompt</h2>
+      <span class="hint">type <code>@Element</code> and <code>#move</code> — they resolve live</span>
+    </div>
+    <textarea id="d-prompt" class="prompt-input" rows="3"
+      placeholder="A detective crosses the diner at 2am, @tamsincamp in the doorway, #dolly-in then #crane-up"></textarea>
+    <div id="d-tags" class="tag-chips"></div>
+    <div class="registry-row">
+      <span class="registry-label">Elements in this project:</span>
+      <span id="d-registry" class="registry-list"></span>
+    </div>
+    <p class="card-foot">
+      <code>@</code> and <code>#</code> are the <em>app's</em> surface syntax. The API's own reference
+      tokens are <code>&lt;&lt;&lt;image_1&gt;&gt;&gt;</code>-style — the plan below shows that
+      translation, because it is the step the tutorials keep skipping.
+    </p>
+  </section>
+
+  <div class="layout">
+    <section class="col-left">
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Film setup</h2>
+          <span class="hint">auto = field omitted</span>
+        </div>
+        <div class="control-grid">
+          <div class="control"><label for="d-genre">Genre</label><select id="d-genre"></select></div>
+          <div class="control"><label for="d-era">Era</label><select id="d-era"></select></div>
+          <div class="control"><label for="d-pacing">Tempo</label><select id="d-pacing"></select></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Camera</h2>
+          <span class="hint">body · lens · aperture</span>
+        </div>
+        <div class="control-grid">
+          <div class="control"><label for="d-model">Body</label><select id="d-model"></select></div>
+          <div class="control"><label for="d-lens">Lens</label><select id="d-lens"></select></div>
+          <div class="control"><label for="d-aperture">Aperture</label><select id="d-aperture"></select></div>
+        </div>
+        <div class="control-grid sliders">
+          <div class="control">
+            <label for="d-focal">
+              Focal length <output id="d-focal-out"></output>
+              <span class="kept-badge" title="4.0 dropped this control; this engine keeps it">kept</span>
+            </label>
+            <input id="d-focal" type="range" min="14" max="135" step="1" value="35" />
+          </div>
+        </div>
+        <p class="card-foot">
+          <strong>Focal length is ours, not 4.0's.</strong> It was one of the three original 1.0
+          controls and is still named in the 2.0/3.5 material, but it is absent from the 4.0
+          settings reference, the help-centre walkthrough, and the API schema — 4.0 ships four
+          bodies and five lenses with no focal control. This engine keeps it first-class, so it
+          appears here in its own <em>engine extension</em> block and never in the parameter block.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Camera movement</h2>
+          <span class="hint">stackable — they run in order</span>
+        </div>
+        <div class="move-add-row">
+          <select id="d-move-add"></select>
+          <button id="d-move-add-btn" class="btn btn-ghost" type="button">Add move</button>
+        </div>
+        <ol id="d-move-stack" class="move-stack"></ol>
+        <p class="card-foot">
+          Each move is carried in the prompt as a <code>#</code> tag. Stack several and they run in
+          the order shown — that ordering is the whole point of the panel.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Lighting &amp; colour</h2>
+          <span class="hint">named looks, not prompt words</span>
+        </div>
+        <div class="control-grid">
+          <div class="control"><label for="d-light">Lighting</label><select id="d-light"></select></div>
+          <div class="control"><label for="d-palette">Colour palette</label><select id="d-palette"></select></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Emotion wheel</h2>
+          <span class="hint">per character</span>
+        </div>
+        <div class="move-add-row">
+          <select id="d-emo-element"></select>
+          <select id="d-emo-emotion"></select>
+          <label class="emo-intensity" for="d-emo-intensity">
+            intensity <output id="d-emo-intensity-out"></output>
+            <input id="d-emo-intensity" type="range" min="0" max="1" step="0.05" value="0.5" />
+          </label>
+          <button id="d-emo-add" class="btn btn-ghost" type="button">Add</button>
+        </div>
+        <ul id="d-emo-list" class="move-stack"></ul>
+        <p class="card-foot">
+          Nine emotion names — the union of the on-screen wheel (which showed eight) and the
+          settings reference (which enumerates eight, differing by <code>Hope</code> vs
+          <code>Interest</code>). The wheel is visibly larger than its visible arc, so this is a
+          floor. One tutorial claims 80 emotions across three strength levels; that is unverified
+          and we do not implement it.
+          <br /><br />
+          <strong>Intensity is continuous 0–1, and the three words are descriptors, not enum
+          members.</strong> The evidence claims three strength levels but no strength control was
+          legible in any frame, so the cut points are unknown — inventing three would be padding.
+          The published API has <strong>no <code>emotion</code> field at all</strong>, so this
+          group is shown in the plan but never sent.
+        </p>
+      </div>
+    </section>
+
+    <section class="col-right">
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Generation</h2>
+          <span class="hint">cost is shown before you confirm</span>
+        </div>
+        <div class="control-grid sliders">
+          <div class="control">
+            <label for="d-duration">Duration <output id="d-duration-out"></output></label>
+            <input id="d-duration" type="range" min="4" max="30" step="1" value="5" />
+          </div>
+        </div>
+        <div class="control-grid">
+          <div class="control"><label for="d-resolution">Resolution</label><select id="d-resolution"></select></div>
+          <div class="control"><label for="d-aspect">Aspect ratio</label><select id="d-aspect"></select></div>
+          <div class="control">
+            <label for="d-audio">Native audio</label>
+            <label class="switch"><input id="d-audio" type="checkbox" checked /><span>on</span></label>
+          </div>
+        </div>
+        <div class="generate-row">
+          <button id="d-generate" class="btn btn-generate" type="button" disabled>
+            <span class="gen-label">Generate</span>
+            <span class="gen-cost" id="d-cost">—</span>
+          </button>
+          <div class="gen-side">
+            <div id="d-cost-note" class="cost-note"></div>
+          </div>
+        </div>
+        <p class="card-foot" id="d-generate-note">
+          This button is disabled on purpose. The panel composes a plan and shows what
+          <em>would</em> be sent; nothing here is wired to a model, and no video is generated.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>What would be sent</h2>
+          <span class="hint">the plan, not a request</span>
+        </div>
+        <h3 class="sub">Composed prompt</h3>
+        <pre id="d-prompt-out" class="plan-pre"></pre>
+        <h3 class="sub">Attachments</h3>
+        <div id="d-attachments" class="attach-list"></div>
+        <h3 class="sub">Parameter block</h3>
+        <pre id="d-params" class="plan-pre"></pre>
+        <h3 class="sub">Engine extension — ours, not the API's</h3>
+        <pre id="d-extensions" class="plan-pre ext-pre"></pre>
+        <h3 class="sub">Omitted (auto)</h3>
+        <div id="d-omitted" class="omitted-list"></div>
+        <div id="d-warnings" class="warn-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Why this pairing is the entry</h2>
+        </div>
+        <p class="card-foot">
+          Re-shooting a subject from a chosen angle is <strong>not new</strong> — other entries in
+          this competition already do it in image space, and one ships a Cinema Studio tab of its
+          own. What none of them does is <em>measure</em> the result. This tab <strong>sets</strong>
+          the parameters; the <strong>Judge</strong> tab measures the frame that comes back against
+          nine cinematography rules and hands you a correction in metres. Setting is commodity.
+          Verifying is the entry.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Provenance</h2>
+          <button id="d-reset" class="btn btn-ghost" type="button">Reset to auto</button>
+        </div>
+        <p class="card-foot" id="d-provenance"></p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ====================== TAB 2: JUDGE (unchanged) ====================== -->
+<div id="tab-judge" class="tabpanel layout hidden">
 
   <!-- ================= LEFT: viewport, frame preview, controls ============ -->
   <section class="col-left">
@@ -219,6 +436,7 @@
       <pre id="json-report"></pre>
     </details>
   </section>
+</div>
 </main>
 
 <footer class="footer">

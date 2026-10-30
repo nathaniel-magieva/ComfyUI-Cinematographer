@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -315,6 +316,214 @@ AUTOFRAME = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Director's Panel fixtures
+# ---------------------------------------------------------------------------
+#
+# The Director tab's option lists come from the Cinema Studio 4.0 Generate API
+# reference. Those lists are frozen here so `parity_check.py` can catch drift in
+# `web/director.js` — and, the moment `cinematographer/director.py` exists,
+# catch drift between the JS mirror and the engine.
+#
+# The frozen lists are additionally re-verified against the captured schema when
+# that capture is readable, so this file is anchored to a source outside itself.
+
+#: The captured API reference, relative to the repository root. Best-effort: the
+#: check degrades to a note when the capture is not on disk.
+#:
+#: The capture ships in this repository under ``research/`` so the citation resolves
+#: for anyone who clones it. It previously pointed two levels above the pack root at
+#: a private research directory, which meant the one check anchoring these enums to a
+#: source outside themselves could never run for a reader.
+CAPTURE_RELPATH = os.path.join("research", "cinema-studio-4.0-api-schema.txt")
+
+DIRECTOR_ENUM_SOURCE = (
+    "Cinema Studio 4.0 Generate API reference (first-party), captured 2026-10-29"
+)
+
+#: Frozen transcription of the API's closed enumerations.
+DIRECTOR_ENUMS = {
+    "genre": ["epic", "drama", "noir", "comedy", "horror", "action"],
+    "era": ["1960s", "1980s", "1990s", "2000s", "2020s"],
+    "pacing": ["chaotic", "dynamic", "calm", "single-shot"],
+    "camera_model": ["modern", "35mm-film", "8mm-film", "dv-camcorder"],
+    "camera_lens": [
+        "clean-sharp",
+        "anamorphic",
+        "vintage-anamorphic",
+        "warm-vintage",
+        "halation-vintage",
+    ],
+    "camera_aperture": ["f14-wide-open", "f4-moderate", "f11-deep-focus"],
+    "camera_movement": [
+        "snorricam", "robot-arm", "tilt-up", "rack-focus", "tilt-down", "pov",
+        "pan-left", "crane-up", "pan-right", "crane-down", "side-tracking",
+        "pedestal-up", "pedestal-down", "handheld", "tracking", "drone-orbit",
+        "dolly-zoom", "aerial-pullback", "static-shot", "bullet-time", "whip-pan",
+        "slow-zoom-in", "arc-left", "slow-zoom-out", "arc-right", "truck-right",
+        "dolly-in", "truck-left", "dolly-out", "slider-right", "crush-zoom",
+        "slider-left", "helicopter-shot",
+    ],
+    "light": [
+        "silhouette", "practicals", "window", "overhead-fall", "contre-jour", "soft-cross",
+    ],
+    "color_palette": [
+        "static-noon", "twilight-fable", "back-row-kissing-seats",
+        "on-the-other-side-of-the-porthole", "the-emerald-ambush", "highway-standoff",
+        "the-faded-fresco", "oil-ochre", "the-mountain-convent", "ghost-in-the-code",
+        "pink-velvet", "two-days-to-the-horizon", "industrial-fog", "stairs-go-up",
+        "field-post", "home-is-the-next-gas-station", "glossy-flesh",
+        "the-crimson-ballet", "neon-rain-at-midnight", "the-morning-after-rain",
+        "the-iron-borough", "the-ground", "the-investigation", "turquoise-mirage",
+        "a-dream-in-color", "breakfast-on-schedule", "favela-gold", "a-hotel-for-one",
+        "after-dark", "crimson-vigi", "the-neighbors-saw-everything",
+        "the-grey-channel", "mirage-at-noon", "bubblegum-boulevard", "yellow-room",
+        "the-earth-keeps-things-reluctantly", "tropic-fever-dream",
+        "bioluminescent-night", "dont-turn-it-off-im-watching",
+        "the-silk-curtain-falls", "the-butterfly", "playtime", "wallpaper-romance",
+        "overtime", "the-way-home-is-longer", "everyone-speaks-in-whispers",
+        "runaway-summer", "amber-wasteland", "the-circus", "gasoline-sunset",
+    ],
+    "aspect_ratio": ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"],
+    # The union of the on-screen wheel (8) and the settings reference (8), which
+    # differ by Interest vs Hope. NOT API-sourced: no `emotion` field exists.
+    "emotion": [
+        "sadness", "fear", "anger", "joy", "trust", "disgust", "surprise",
+        "interest", "hope",
+    ],
+    # The API accepts two; the shipped UI offers three. The panel shows all three
+    # and flags 1080p, so the fixture records both facts.
+    "resolution": ["480p", "720p"],
+}
+
+#: Enum members the shipped UI offers but the documented API rejects.
+DIRECTOR_UI_ONLY = {"resolution": ["1080p"]}
+
+#: Enums that are NOT in the API schema, with the source that does carry them.
+#: The capture anchor must not be applied to these.
+DIRECTOR_NON_API_ENUMS = {
+    "emotion": (
+        "Emotion wheel: union of the on-screen wheel (V3) and the settings "
+        "reference, which differ by Interest vs Hope. No API `emotion` field exists."
+    ),
+}
+
+#: The published credit table: native audio on, 16:9 frame, priced 2026-10-24.
+#: All nine cells are exactly linear in duration (3 / 7 / 16 credits per second).
+DIRECTOR_CREDIT_TABLE = {
+    "480p": {10: 30, 15: 45, 30: 90},
+    "720p": {10: 70, 15: 105, 30: 210},
+    "1080p": {10: 160, 15: 240, 30: 480},
+}
+
+DIRECTOR_CREDIT_SOURCE = (
+    "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; "
+    "corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+)
+
+
+def parse_capture_enums() -> dict[str, list[str]]:
+    """Re-read the enum lists out of the captured API reference.
+
+    Returns an empty dict when the capture is not on disk. This is an anchor,
+    not a dependency: the frozen lists above are what the fixtures use.
+    """
+    path = os.path.normpath(os.path.join(APP_DIR, CAPTURE_RELPATH))
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return {}
+
+    found: dict[str, list[str]] = {}
+    # The capture escapes underscores in field names (`**camera\_lens**`).
+    field_re = re.compile(r"^\*\*([a-z_\\]+)\*\*\s+`", re.M)
+    allowed_re = re.compile(r"^Allowed values:\s*(.+?)\.\s*$", re.M)
+
+    marks = list(field_re.finditer(text))
+    for i, m in enumerate(marks):
+        name = m.group(1).replace("\\_", "_")
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        block = text[m.end():end]
+        am = allowed_re.search(block)
+        if not am:
+            continue
+        found[name] = re.findall(r'`"([^"]+)"`', am.group(1))
+    return found
+
+
+def director_fixtures() -> tuple[dict, list[str]]:
+    """Build the `director` fixture section, plus notes for the report."""
+    notes: list[str] = []
+
+    # Anchor check: the frozen lists must agree with the capture when it is here.
+    captured = parse_capture_enums()
+    if not captured:
+        notes.append("schema capture not readable — frozen lists used unverified")
+    else:
+        for name, values in DIRECTOR_ENUMS.items():
+            if name in DIRECTOR_NON_API_ENUMS:
+                continue
+            if name not in captured:
+                notes.append(f"{name}: not found in the capture")
+            elif captured[name] != values:
+                notes.append(
+                    f"{name}: frozen list disagrees with the capture "
+                    f"({len(values)} vs {len(captured[name])})"
+                )
+        extra = sorted(set(captured) - set(DIRECTOR_ENUMS))
+        if extra:
+            notes.append("capture has enums we do not model: " + ", ".join(extra))
+
+    # The engine's own module is authoritative when it exists.
+    py_present = os.path.exists(os.path.join(APP_DIR, "cinematographer", "director.py"))
+    notes.append(
+        "cinematographer/director.py present — cross-checked"
+        if py_present
+        else "cinematographer/director.py ABSENT — Python side not cross-checked"
+    )
+
+    enums = []
+    for name, values in DIRECTOR_ENUMS.items():
+        entry = {
+            "id": f"enum_{name}",
+            "enum": name,
+            "values": list(values),
+            "source": DIRECTOR_NON_API_ENUMS.get(name, DIRECTOR_ENUM_SOURCE),
+            "api_backed": name not in DIRECTOR_NON_API_ENUMS,
+        }
+        if name in DIRECTOR_UI_ONLY:
+            entry["ui_only"] = list(DIRECTOR_UI_ONLY[name])
+        enums.append(entry)
+
+    credits = []
+    for resolution, cells in DIRECTOR_CREDIT_TABLE.items():
+        for duration, published in cells.items():
+            credits.append(
+                {
+                    "id": f"credit_{duration}s_{resolution}",
+                    "duration": duration,
+                    "resolution": resolution,
+                    "expected_credits": published,
+                    "source": DIRECTOR_CREDIT_SOURCE,
+                }
+            )
+
+    section = {
+        "meta": {
+            "enum_source": DIRECTOR_ENUM_SOURCE,
+            "credit_source": DIRECTOR_CREDIT_SOURCE,
+            "python_module": "cinematographer/director.py",
+            "python_present": py_present,
+            "capture_verified": bool(captured),
+            "notes": notes,
+        },
+        "enums": enums,
+        "credits": credits,
+    }
+    return section, notes
+
+
 def engine_revision() -> str:
     """Best-effort git revision for provenance."""
     try:
@@ -392,6 +601,7 @@ def main() -> int:
         "continuity": [],
         "reliability": [],
         "autoframe": [],
+        "director": {},
     }
 
     for fx in FRAMING:
@@ -448,6 +658,9 @@ def main() -> int:
             }
         )
 
+    director, director_notes = director_fixtures()
+    data["director"] = director
+
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2)
         fh.write("\n")
@@ -459,6 +672,13 @@ def main() -> int:
             **{k: len(data[k]) for k in ("framing", "continuity", "reliability", "autoframe")}
         )
     )
+    print(
+        "  director: {e} enums, {c} credit cells".format(
+            e=len(director["enums"]), c=len(director["credits"])
+        )
+    )
+    for note in director_notes:
+        print(f"    note: {note}")
     return 0
 
 

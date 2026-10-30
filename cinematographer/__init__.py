@@ -7,9 +7,9 @@ render.
 Exports
 -------
 ``NODE_CLASS_MAPPINGS`` / ``NODE_DISPLAY_NAME_MAPPINGS``
-    The six ComfyUI nodes (see :mod:`cinematographer.nodes`).
-``geometry``, ``framing``, ``scene``, ``continuity``, ``autoframe``,
-``reliability``
+    The eighteen ComfyUI nodes (see :mod:`cinematographer.nodes`).
+``geometry``, ``framing``, ``scene``, ``continuity``, ``character``,
+``autoframe``, ``reliability``, ``elements``, ``post``, ``director``, ``prompt``
     The pure-Python engine, re-exported for convenience. It is stdlib-only and
     has no ComfyUI dependency, so it is importable anywhere.
 
@@ -31,7 +31,19 @@ __version__ = "0.1.0"
 # --------------------------------------------------------------------------
 from .nodes import (  # noqa: E402
     CameraReliabilityZone as _CameraReliabilityZoneNode,
+    CharacterContinuity as _CharacterContinuityNode,
     ChorosContinuity as _ChorosContinuityNode,
+    CinemaCameraMove as _CinemaCameraMoveNode,
+    CinemaDirectorPanel as _CinemaDirectorPanelNode,
+    CinemaEdit as _CinemaEditNode,
+    CinemaElementList as _CinemaElementListNode,
+    CinemaElementLoad as _CinemaElementLoadNode,
+    CinemaElementSave as _CinemaElementSaveNode,
+    CinemaEmotionWheel as _CinemaEmotionWheelNode,
+    CinemaExtend as _CinemaExtendNode,
+    CinemaGrade as _CinemaGradeNode,
+    CinemaGradeApply as _CinemaGradeApplyNode,
+    CinemaPromptCompose as _CinemaPromptComposeNode,
     CinematographerAutoFrame as _CinematographerAutoFrameNode,
     CinematographerCorrection as _CinematographerCorrectionNode,
     CinematographerEvaluate as _CinematographerEvaluateNode,
@@ -40,18 +52,42 @@ from .nodes import (  # noqa: E402
     SceneFramingExtras as _SceneFramingExtrasNode,
 )
 
-#: The six node classes, re-exported by their ComfyUI class names.
+#: The node classes, re-exported by their ComfyUI class names.
 CinematographerEvaluate = _CinematographerEvaluateNode
 CinematographerAutoFrame = _CinematographerAutoFrameNode
 ChorosContinuity = _ChorosContinuityNode
+CharacterContinuity = _CharacterContinuityNode
 SceneFramingExtras = _SceneFramingExtrasNode
 CameraReliabilityZone = _CameraReliabilityZoneNode
 CinematographerCorrection = _CinematographerCorrectionNode
+CinemaElementSave = _CinemaElementSaveNode
+CinemaElementLoad = _CinemaElementLoadNode
+CinemaElementList = _CinemaElementListNode
+CinemaDirectorPanel = _CinemaDirectorPanelNode
+CinemaCameraMove = _CinemaCameraMoveNode
+CinemaEmotionWheel = _CinemaEmotionWheelNode
+CinemaPromptCompose = _CinemaPromptComposeNode
+CinemaGrade = _CinemaGradeNode
+CinemaGradeApply = _CinemaGradeApplyNode
+CinemaExtend = _CinemaExtendNode
+CinemaEdit = _CinemaEditNode
 
 # --------------------------------------------------------------------------
 # Safe re-export of the engine API.
 # --------------------------------------------------------------------------
-_ENGINE_MODULES = ("geometry", "framing", "scene", "continuity", "autoframe", "reliability")
+_ENGINE_MODULES = (
+    "geometry",
+    "framing",
+    "scene",
+    "continuity",
+    "character",
+    "autoframe",
+    "reliability",
+    "elements",
+    "post",
+    "director",
+    "prompt",
+)
 
 #: ``None`` when every engine module imported; otherwise the reason it did not.
 ENGINE_IMPORT_ERROR: str | None = None
@@ -100,6 +136,25 @@ _ENGINE_EXPORTS = {
     "EvaluateContinuity": ("continuity", "evaluate_continuity"),
     "continuity_summary": ("continuity", "continuity_summary"),
     "CONTINUITY_RULES": ("continuity", "CONTINUITY_RULES"),
+    # character
+    "CharacterAppearance": ("character", "CharacterAppearance"),
+    "CharacterDrift": ("character", "CharacterDrift"),
+    "CharacterContinuityReport": ("character", "CharacterContinuityReport"),
+    "evaluate_character_continuity": ("character", "evaluate_character_continuity"),
+    "EvaluateCharacterContinuity": ("character", "evaluate_character_continuity"),
+    "character_continuity_summary": ("character", "character_continuity_summary"),
+    "palette_distance": ("character", "palette_distance"),
+    "proportion_delta": ("character", "proportion_delta"),
+    "framing_delta": ("character", "framing_delta"),
+    "CHARACTER_RULES": ("character", "CHARACTER_RULES"),
+    "INFORMATIONAL_CHARACTER_RULES": ("character", "INFORMATIONAL_CHARACTER_RULES"),
+    "PALETTE_DRIFT_MAX": ("character", "PALETTE_DRIFT_MAX"),
+    "PROPORTION_DRIFT_MAX": ("character", "PROPORTION_DRIFT_MAX"),
+    "FRAMING_DRIFT_MAX": ("character", "FRAMING_DRIFT_MAX"),
+    # NOTE: the CamelCase alias "CharacterContinuity" is deliberately NOT exported
+    # here -- the spec uses that name for both the engine module and the ComfyUI
+    # node, and the node class wins at package level. Reach the engine function as
+    # character.evaluate_character_continuity or evaluate_character_continuity.
     # autoframe
     "AutoFrameResult": ("autoframe", "AutoFrameResult"),
     "auto_frame_camera": ("autoframe", "auto_frame_camera"),
@@ -116,6 +171,77 @@ _ENGINE_EXPORTS = {
     # engine function as reliability.camera_reliability_zone or
     # camera_reliability_zone.
     "ZONES": ("reliability", "ZONES"),
+    # elements -- the @Name registry that makes the stages a pipeline
+    "ELEMENT_CATEGORIES": ("elements", "ELEMENT_CATEGORIES"),
+    "ELEMENT_RULES": ("elements", "ELEMENT_RULES"),
+    "ELEMENT_RULE_WEIGHTS": ("elements", "ELEMENT_RULE_WEIGHTS"),
+    "ELEMENT_SIDECAR_SUFFIX": ("elements", "ELEMENT_SIDECAR_SUFFIX"),
+    "Element": ("elements", "Element"),
+    "ElementRegistry": ("elements", "ElementRegistry"),
+    "ElementResolution": ("elements", "ElementResolution"),
+    "parse_element_tags": ("elements", "parse_element_tags"),
+    "resolve_elements": ("elements", "resolve_elements"),
+    "element_summary": ("elements", "element_summary"),
+    "character_record_from_element": ("elements", "character_record_from_element"),
+    "audit_element": ("elements", "audit_element"),
+    "audit_summary": ("elements", "audit_summary"),
+    "sidecar_path": ("elements", "sidecar_path"),
+    # post -- grade / extend / edit, as plans rather than pixels
+    "GRADE_PARAMS": ("post", "GRADE_PARAMS"),
+    "GRADE_NEUTRAL": ("post", "GRADE_NEUTRAL"),
+    "GRADE_RANGES": ("post", "GRADE_RANGES"),
+    "grade_range": ("post", "grade_range"),
+    "GradeSettings": ("post", "GradeSettings"),
+    "GradePlan": ("post", "GradePlan"),
+    "apply_grade": ("post", "apply_grade"),
+    "EXTEND_MODES": ("post", "EXTEND_MODES"),
+    "EXTEND_DURATION_RANGE": ("post", "EXTEND_DURATION_RANGE"),
+    "EXTEND_OVERLAP_MAX_FRAMES": ("post", "EXTEND_OVERLAP_MAX_FRAMES"),
+    "DEFAULT_FPS": ("post", "DEFAULT_FPS"),
+    "DEFAULT_EXTEND_DURATION_S": ("post", "DEFAULT_EXTEND_DURATION_S"),
+    "ExtendPlan": ("post", "ExtendPlan"),
+    "EditRegion": ("post", "EditRegion"),
+    "EditPlan": ("post", "EditPlan"),
+    "POST_STAGES": ("post", "POST_STAGES"),
+    "POST_RULES": ("post", "POST_RULES"),
+    "POST_RULE_WEIGHTS": ("post", "POST_RULE_WEIGHTS"),
+    "PostPlan": ("post", "PostPlan"),
+    "post_summary": ("post", "post_summary"),
+    # director -- the Stage 3 panel, as data rather than a widget
+    "GENRES": ("director", "GENRES"),
+    "ERAS": ("director", "ERAS"),
+    "TEMPOS": ("director", "TEMPOS"),
+    "CAMERA_BODIES": ("director", "CAMERA_BODIES"),
+    "LENSES": ("director", "LENSES"),
+    "APERTURES": ("director", "APERTURES"),
+    "LIGHTING_LOOKS": ("director", "LIGHTING_LOOKS"),
+    "COLOUR_PALETTES": ("director", "COLOUR_PALETTES"),
+    "COLOUR_PALETTES_TOTAL": ("director", "COLOUR_PALETTES_TOTAL"),
+    "EMOTIONS": ("director", "EMOTIONS"),
+    "EMOTION_INTENSITY_MIN": ("director", "EMOTION_INTENSITY_MIN"),
+    "EMOTION_INTENSITY_MAX": ("director", "EMOTION_INTENSITY_MAX"),
+    "PANEL_FIELDS": ("director", "PANEL_FIELDS"),
+    "FilmSetup": ("director", "FilmSetup"),
+    "CameraSetup": ("director", "CameraSetup"),
+    "LightingSetup": ("director", "LightingSetup"),
+    "PaletteSetup": ("director", "PaletteSetup"),
+    "EmotionDirection": ("director", "EmotionDirection"),
+    "DirectorPanel": ("director", "DirectorPanel"),
+    "panel_prompt_fragment": ("director", "panel_prompt_fragment"),
+    "panel_conditioning": ("director", "panel_conditioning"),
+    "panel_summary": ("director", "panel_summary"),
+    # prompt -- the Stage 4 assembly, and the #camera-move tags
+    "CAMERA_MOVES": ("prompt", "CAMERA_MOVES"),
+    "CAMERA_MOVES_TOTAL": ("prompt", "CAMERA_MOVES_TOTAL"),
+    "MOVE_TAG_PREFIX": ("prompt", "MOVE_TAG_PREFIX"),
+    "API_REFERENCE_TOKEN": ("prompt", "API_REFERENCE_TOKEN"),
+    "parse_move_tags": ("prompt", "parse_move_tags"),
+    "resolve_move_tags": ("prompt", "resolve_move_tags"),
+    "move_summary": ("prompt", "move_summary"),
+    "MoveResolution": ("prompt", "MoveResolution"),
+    "MoveStack": ("prompt", "MoveStack"),
+    "ComposedPrompt": ("prompt", "ComposedPrompt"),
+    "compose_prompt": ("prompt", "compose_prompt"),
 }
 
 for _export, (_module_name, _attr) in _ENGINE_EXPORTS.items():
@@ -142,6 +268,7 @@ __all__ = [
     "CinematographerEvaluate",
     "CinematographerAutoFrame",
     "ChorosContinuity",
+    "CharacterContinuity",
     "SceneFramingExtras",
     "CameraReliabilityZone",
     "CinematographerCorrection",

@@ -1,0 +1,627 @@
+{
+  "_README": [
+    "Re-shoot / generate a clip on LTX 2.5: text-to-video, or image-to-video from a first frame.",
+    "ComfyUI API-format workflow. Node category: Cinematographer.",
+    "",
+    "STATUS: NOT VERIFIED. This graph has never been executed. It was authored from the",
+    "official Lightricks example workflow (see PROVENANCE) but no ComfyUI instance was",
+    "available where it was written, so nothing here is a claim that it runs. What IS",
+    "verified is structural, and you can re-run it yourself:",
+    "  python3 workflows/validate_graphs.py",
+    "That checks the file parses as JSON, that every node has class_type + inputs, that",
+    "every class_type is in a table of slot counts read from the node sources, that",
+    "every link resolves to an existing node id and a slot that node declares, that every",
+    "node supplies a legal number of inputs for its class_type, that the graph is acyclic,",
+    "and that every node is reachable from a SaveVideo. It does NOT check that ComfyUI",
+    "accepts the prompt. Treat the first run as a debugging session.",
+    "",
+    "PROVENANCE. This is a faithful flattening of the official Lightricks two-stage graph,",
+    "fetched and read on 2026-10-29:",
+    "  https://raw.githubusercontent.com/Lightricks/ComfyUI-LTXVideo/master/",
+    "      example_workflows/2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled.json",
+    "  (191,541 bytes, matching the size the GitHub contents API reports for that path;",
+    "   Apache-2.0. The sibling single-stage file, 153,776 bytes, was read for comparison.)",
+    "The upstream file is ComfyUI UI format and is built out of SIX SUBGRAPHS",
+    "(Load Models, Input Parameters, Preprocess, Sampler - Distilled (8 steps), Upscale and",
+    "re-sampler (3 steps), Decode). Subgraphs do not exist in API format, so each one was",
+    "flattened into its constituent nodes and the internal links re-pointed. Node names,",
+    "widget values and wiring below are the upstream ones, not reconstructions:",
+    "  Load Models            UNETLoader, 2x VAELoader, 2x CLIPLoader, LatentUpscaleModelLoader",
+    "  Input Parameters       ResizeImageMaskNode, 2x CLIPTextEncode, LTXVConditioning,",
+    "                         2x TextGenerateLTX2Prompt, 2x GemmaAPITextEncode, ComfySwitchNode x4,",
+    "                         ComfyNotNode, ComfyMathExpression, StringContains, Primitive*",
+    "  Preprocess             LTXVPreprocess, EmptyLTXVLatentVideo, LTXFloatToInt,",
+    "                         LTXVEmptyLatentAudio, LTXVImgToVideoInplace, LTXVConcatAVLatent",
+    "  Sampler (8 steps)      RandomNoise, CFGGuider, KSamplerSelect, ManualSigmas,",
+    "                         SamplerCustomAdvanced, LTXVSeparateAVLatent",
+    "  Upscale + re-sampler   LTXVLatentUpsampler, LTXVImgToVideoInplace, LTXVConcatAVLatent,",
+    "                         RandomNoise, CFGGuider, KSamplerSelect, ManualSigmas,",
+    "                         SamplerCustomAdvanced, LTXVSeparateAVLatent",
+    "  Decode                 VAEDecodeTiled, LTXVAudioVAEDecode, CreateVideo",
+    "Every class_type used here was then re-checked against the ComfyUI master source that",
+    "defines it, so the slot table in validate_graphs.py is read, not guessed:",
+    "  comfy_extras/nodes_lt.py            LTXVPreprocess, EmptyLTXVLatentVideo,",
+    "                                      LTXVImgToVideoInplace, LTXVConditioning,",
+    "                                      LTXVConcatAVLatent, LTXVSeparateAVLatent",
+    "  comfy_extras/nodes_lt_audio.py      LTXVEmptyLatentAudio, LTXVAudioVAEDecode",
+    "  comfy_extras/nodes_lt_upsampler.py  LTXVLatentUpsampler",
+    "  comfy_extras/nodes_hunyuan.py       LatentUpscaleModelLoader",
+    "  comfy_extras/nodes_video.py         CreateVideo, SaveVideo",
+    "  comfy_extras/nodes_custom_sampler.py CFGGuider, KSamplerSelect, ManualSigmas,",
+    "                                      RandomNoise, SamplerCustomAdvanced",
+    "  nodes.py                            LoadImage, ImageScale, UNETLoader, CLIPLoader,",
+    "                                      VAELoader, CLIPTextEncode, VAEDecodeTiled",
+    "",
+    "DELIBERATE DELTAS from the upstream graph, and only these:",
+    "  1. The whole Input Parameters subgraph is replaced by a plain CLIPTextEncode pair.",
+    "     That subgraph exists to (a) resize the input still, (b) optionally rewrite the",
+    "     positive prompt with a local Gemma 4 E2B or with the LTX API, (c) derive the frame",
+    "     count from fps x duration, and (d) switch conditioning between the local encode and",
+    "     the API encode. (a) is done here by ImageScale, (c) is done by the app that fills",
+    "     this file, and (b) and (d) are dropped on purpose -- see delta 2.",
+    "  2. GemmaAPITextEncode is NOT used. It encodes and enhances the prompt through the LTX",
+    "     API, i.e. a closed hosted service, and this entry's whole licence argument is that",
+    "     nothing closed sits in the critical path. Dropping it also drops the",
+    "     TextGenerateLTX2Prompt enhancer and its gemma4_e2b_it_bf16.safetensors weight, so",
+    "     this graph needs ONE text encoder instead of two. The prompt is used as written.",
+    "  3. ResizeImageMaskNode ('scale longer dimension', 1536) is replaced by ImageScale to",
+    "     the exact working size. The upstream resize is a convenience for interactive use;",
+    "     an API graph driven by an app knows the output size it wants, and resizing straight",
+    "     to 960x544 is what the latent geometry needs anyway.",
+    "  4. The ComfySwitchNode / ComfyNotNode / ComfyMathExpression / StringContains /",
+    "     Primitive* plumbing is gone with the subgraph it lived in. The frame count is a",
+    "     literal (121 = 1 + 15*8) instead of computed from fps x duration, because the app",
+    "     computes it. The rule it must keep obeying: frames = 1 + a multiple of 8.",
+    "  5. The 'use image input' toggle becomes the `bypass` widget on the two",
+    "     LTXVImgToVideoInplace nodes. Both are false here, which is I2V: the still is the",
+    "     first frame. Set BOTH to true for T2V. They must agree -- the upstream graph drives",
+    "     them from one switch for exactly that reason.",
+    "  6. The Reroute node that carried the checkpoint path into the API text encoder is",
+    "     dropped with the API encoder.",
+    "  7. filename_prefix -> cinematographer/*, to namespace our outputs.",
+    "  8. The positive prompt is an obvious placeholder. If a generated clip ever shows",
+    "     PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN, injection did not run; that is",
+    "     the signal it is there for.",
+    "  9. LoadImage.image is a placeholder filename. The app overwrites it with the uploaded",
+    "     still on every request.",
+    " 10. The upstream graph's PreviewAny node is dropped. It has an output and no consumer,",
+    "     so it would be dead weight in an API export.",
+    "",
+    "WHAT IS VERIFIED vs NOT:",
+    "  VERIFIED      valid JSON; class_type + inputs on every node; every link resolves to",
+    "                an existing node id and a declared output slot; every node supplies a",
+    "                legal number of inputs; acyclic; every node reachable from SaveVideo.",
+    "  NOT VERIFIED  that ComfyUI accepts this prompt; that the weights below are installed;",
+    "                that it produces a clip. None of that has been run.",
+    "",
+    "REQUIRED NODE PACKS (custom):",
+    "  NONE. Every class_type in this graph is ComfyUI core. That is a real difference from",
+    "  the LTX 2.3 graph, which needs ComfyUI-LTXVideo for its IC-LoRA nodes and",
+    "  ComfyUI-CrossViewWarp for the camera. LTX 2.5's IC-LoRAs are not used here, so the",
+    "  Lightricks pack is not on the critical path at all.",
+    "",
+    "REQUIRED WEIGHTS (paths as ComfyUI names them; every name below is copied from the",
+    "upstream graph's own loader widgets and its 'Model Links' note, not inferred):",
+    "  models/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+    "  models/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+    "  models/vae/ltx-2.5-video-vae-bf16.safetensors",
+    "  models/vae/ltx-2.5-audio-vae-bf16.safetensors",
+    "  models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+    "Documented alternatives from the same note, NOT wired here:",
+    "  models/vae/ltx-2.5-video-vae-conv-bf16.safetensors   (convolutional decoder: lower",
+    "      memory, faster, lower quality -- swap it into node 6)",
+    "  models/text_encoders/gemma4_e2b_it_bf16.safetensors  (only needed by the prompt",
+    "      enhancer this graph deliberately does not use)",
+    "LTX 2.5 weights are GATED on HuggingFace (Lightricks/LTX-2.5): click 'Agree and Access'",
+    "once before downloading. The text encoder is finetuned for 2.5 specifically -- it is",
+    "gemma4-12b-WITH-PROJ, i.e. the text-projection layer is baked in, which is why this",
+    "graph loads ONE CLIPLoader where the 2.3 graph loads a DualCLIPLoader plus a separate",
+    "text_projection file.",
+    "",
+    "LICENCE. LTX 2.5 weights are LTX-2.x Community (revenue-capped) and gated; ComfyUI is",
+    "GPL-3.0. No MiniMax H3 and no closed API in the critical path -- the upstream graph's",
+    "optional LTX-API prompt encoder was removed for exactly that reason. See",
+    "reshoot_wan22_fun_control.json for the Apache-2.0-only alternative.",
+    "",
+    "MEASURED: nothing. No timing, no VRAM figure, no output. The upstream graph's own notes",
+    "say its defaults are tuned for lower-VRAM machines and that decode tile size is the",
+    "knob to raise if you have memory; that is a quote, not our measurement."
+  ],
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "PLACEHOLDER_SET_BY_THE_APP.png"
+    },
+    "_meta": {
+      "title": "First frame (I2V) / ignored in T2V"
+    }
+  },
+  "2": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 960,
+      "height": 544,
+      "crop": "disabled"
+    },
+    "_meta": {
+      "title": "Resize to the LTX 2.5 working size (960x544, /32)"
+    }
+  },
+  "3": {
+    "class_type": "LTXVPreprocess",
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "img_compression": 18
+    },
+    "_meta": {
+      "title": "LTXV preprocess (upstream img_compression 18)"
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "LTX 2.5 22B distilled transformer"
+    }
+  },
+  "5": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Gemma 4 12B text encoder (projection baked in)"
+    }
+  },
+  "6": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "Video VAE (diffusion decoder)"
+    }
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "Audio VAE"
+    }
+  },
+  "8": {
+    "class_type": "LatentUpscaleModelLoader",
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "_meta": {
+      "title": "2x latent spatial upscaler (stage 2)"
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "5",
+        0
+      ],
+      "text": "PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN"
+    },
+    "_meta": {
+      "title": "Positive prompt (placeholder)"
+    }
+  },
+  "10": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "5",
+        0
+      ],
+      "text": "text, subtitles, logo, watermark, signature, still image, static"
+    },
+    "_meta": {
+      "title": "Negative prompt"
+    }
+  },
+  "11": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": [
+        "9",
+        0
+      ],
+      "negative": [
+        "10",
+        0
+      ],
+      "frame_rate": 24.0
+    },
+    "_meta": {
+      "title": "LTX conditioning @ 24 fps"
+    }
+  },
+  "12": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 960,
+      "height": 544,
+      "length": 121,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty video latent (121 frames = 1 + 15*8)"
+    }
+  },
+  "13": {
+    "class_type": "LTXVEmptyLatentAudio",
+    "inputs": {
+      "frames_number": 121,
+      "frame_rate": 24.0,
+      "batch_size": 1,
+      "audio_vae": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Empty audio latent"
+    }
+  },
+  "14": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": [
+        "6",
+        0
+      ],
+      "image": [
+        "3",
+        0
+      ],
+      "latent": [
+        "12",
+        0
+      ],
+      "strength": 0.7,
+      "bypass": false
+    },
+    "_meta": {
+      "title": "Stage 1 image conditioning (bypass=true for T2V)"
+    }
+  },
+  "15": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "14",
+        0
+      ],
+      "audio_latent": [
+        "13",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 1: concat audio + video latents"
+    }
+  },
+  "16": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 42
+    },
+    "_meta": {
+      "title": "Stage 1 seed"
+    }
+  },
+  "17": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "11",
+        1
+      ],
+      "cfg": 1.0
+    },
+    "_meta": {
+      "title": "Stage 1 CFG guider (cfg 1: distilled)"
+    }
+  },
+  "18": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "_meta": {
+      "title": "Stage 1 sampler (upstream default)"
+    }
+  },
+  "19": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "_meta": {
+      "title": "Stage 1 sigmas (8 steps, upstream verbatim)"
+    }
+  },
+  "20": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "16",
+        0
+      ],
+      "guider": [
+        "17",
+        0
+      ],
+      "sampler": [
+        "18",
+        0
+      ],
+      "sigmas": [
+        "19",
+        0
+      ],
+      "latent_image": [
+        "15",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 1 sample (8 steps)"
+    }
+  },
+  "21": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "20",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 1: split audio + video latents"
+    }
+  },
+  "22": {
+    "class_type": "LTXVLatentUpsampler",
+    "inputs": {
+      "samples": [
+        "21",
+        0
+      ],
+      "upscale_model": [
+        "8",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 2: 2x spatial latent upscale"
+    }
+  },
+  "23": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": [
+        "6",
+        0
+      ],
+      "image": [
+        "3",
+        0
+      ],
+      "latent": [
+        "22",
+        0
+      ],
+      "strength": 1.0,
+      "bypass": false
+    },
+    "_meta": {
+      "title": "Stage 2 image conditioning (strength 1.0, upstream)"
+    }
+  },
+  "24": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "23",
+        0
+      ],
+      "audio_latent": [
+        "21",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Stage 2: concat audio + video latents"
+    }
+  },
+  "25": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 42
+    },
+    "_meta": {
+      "title": "Stage 2 seed"
+    }
+  },
+  "26": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "11",
+        1
+      ],
+      "cfg": 1.0
+    },
+    "_meta": {
+      "title": "Stage 2 CFG guider (cfg 1)"
+    }
+  },
+  "27": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "Stage 2 sampler (upstream default)"
+    }
+  },
+  "28": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "0.909375, 0.725, 0.421875, 0.0"
+    },
+    "_meta": {
+      "title": "Stage 2 sigmas (3 steps, upstream verbatim)"
+    }
+  },
+  "29": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "25",
+        0
+      ],
+      "guider": [
+        "26",
+        0
+      ],
+      "sampler": [
+        "27",
+        0
+      ],
+      "sigmas": [
+        "28",
+        0
+      ],
+      "latent_image": [
+        "24",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 2 sample (3-step refine)"
+    }
+  },
+  "30": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "29",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Stage 2: split audio + video latents"
+    }
+  },
+  "31": {
+    "class_type": "VAEDecodeTiled",
+    "inputs": {
+      "samples": [
+        "30",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "tile_size": 512,
+      "overlap": 64,
+      "temporal_size": 128,
+      "temporal_overlap": 32
+    },
+    "_meta": {
+      "title": "Decode video (upstream low-VRAM tile defaults)"
+    }
+  },
+  "32": {
+    "class_type": "LTXVAudioVAEDecode",
+    "inputs": {
+      "samples": [
+        "30",
+        1
+      ],
+      "audio_vae": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode audio"
+    }
+  },
+  "33": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "31",
+        0
+      ],
+      "audio": [
+        "32",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    },
+    "_meta": {
+      "title": "Result"
+    }
+  },
+  "34": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "33",
+        0
+      ],
+      "filename_prefix": "cinematographer/reshoot_ltx25",
+      "format": "mp4",
+      "codec": "h264"
+    },
+    "_meta": {
+      "title": "Save result"
+    }
+  }
+}

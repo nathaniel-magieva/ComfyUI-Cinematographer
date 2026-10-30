@@ -11,6 +11,8 @@
 
 import * as C from './cinematographer.js';
 import * as P from './panel_state.js';
+import * as D from './director.js';
+import * as DP from './director_panel.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -424,6 +426,8 @@ function initViewport(THREE) {
   scene.add(camBody);
 
   function resize() {
+    // The Judge panel starts hidden, so the container can measure 0×0. Fall back
+    // to a sane size and re-measure for real when the tab is shown.
     const w = el.viewport.clientWidth || 640;
     const h = el.viewport.clientHeight || 360;
     renderer.setSize(w, h, false);
@@ -477,6 +481,7 @@ function initViewport(THREE) {
     shotCam,
     camBody,
     helper,
+    resize,
     update(camera, report) {
       const s = state.subject;
       const [base, eyeAnchor] = C.anchors(s);
@@ -684,12 +689,73 @@ function runAutoFrame() {
 }
 
 // ---------------------------------------------------------------------------
+// Tabs — Director (default) and Judge
+// ---------------------------------------------------------------------------
+
+const TABS = ['director', 'judge'];
+
+function showTab(name) {
+  if (!TABS.includes(name)) name = 'director';
+  for (const t of TABS) {
+    const panel = document.getElementById(`tab-${t}`);
+    if (panel) panel.classList.toggle('hidden', t !== name);
+  }
+  for (const btn of document.querySelectorAll('#tabnav .tab')) {
+    const on = btn.dataset.tab === name;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  const note = document.getElementById('tabnav-note');
+  if (note) {
+    note.textContent =
+      name === 'director'
+        ? 'The Director tab composes a plan. It does not generate anything.'
+        : 'The Judge tab measures a frame. It does not generate anything either.';
+  }
+  // The viewport canvas has no size while its panel is hidden; re-measure on show.
+  if (name === 'judge' && view) {
+    view.resize();
+    const data = P.compute(state);
+    view.update(data.camera, data.report);
+  }
+}
+
+function wireTabs() {
+  const nav = document.getElementById('tabnav');
+  if (nav) {
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab');
+      if (btn) showTab(btn.dataset.tab);
+    });
+  }
+  showTab('director');
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 
 async function boot() {
-  wireControls();
-  render();
+  // An async boot swallows its own rejections, which is how a typo in this file
+  // can leave the panel half-built with nothing on screen. Record them so
+  // `tools/browser_check.mjs` can fail loudly instead.
+  window.__panelErrors = [];
+  window.addEventListener('error', (e) => {
+    window.__panelErrors.push(String(e.message || e.error || 'error'));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    window.__panelErrors.push(String(e.reason?.message || e.reason || 'unhandled rejection'));
+  });
+
+  try {
+    wireTabs();
+    wireControls();
+    render();
+    DP.initDirectorPanel();
+  } catch (err) {
+    window.__panelErrors.push(`boot: ${err.message}`);
+    throw err;
+  }
 
   // Debug/verification hook. `tools/browser_check.mjs` uses it to force a
   // synchronous render and sample real pixels — the only reliable way to prove
@@ -701,6 +767,10 @@ async function boot() {
     render,
     engine: C,
     panel: P,
+    director: D,
+    directorState: DP.directorState,
+    directorPanel: DP,
+    showTab,
   };
 
   three = await loadThree();

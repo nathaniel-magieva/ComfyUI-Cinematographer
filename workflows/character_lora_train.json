@@ -1,0 +1,269 @@
+{
+  "_README": [
+    "Train a character LoRA on ComfyUI's native training nodes, then save the .safetensors.",
+    "ComfyUI API-format workflow. Node category: Cinematographer.",
+    "",
+    "STATUS: NOT VERIFIED. This graph has never been executed, and NO LORA HAS BEEN",
+    "TRAINED. It was authored from the node schemas in ComfyUI master (see PROVENANCE) but",
+    "no ComfyUI instance and no GPU were available where it was written, so nothing here is",
+    "a claim that it runs or that it produces a usable adapter. What IS verified is",
+    "structural, and you can re-run it yourself:",
+    "  python3 workflows/validate_graphs.py",
+    "That checks the file parses as JSON, that every node has class_type + inputs, that",
+    "every class_type is in a table of slot counts read from the node sources, that",
+    "every link resolves to an existing node id and a slot that node declares, that every",
+    "node supplies a legal number of inputs for its class_type, that the graph is acyclic,",
+    "and that every node is reachable from an output node. It does NOT check that ComfyUI",
+    "accepts the prompt. Treat the first run as a debugging session.",
+    "",
+    "WHY THE BASE IS LTX 2.3 AND NOT AN IMAGE MODEL. A LoRA is not portable: it is a set of",
+    "low-rank deltas against one base's attention and projection weights, so it only loads",
+    "into the base it was trained on. The adapter this graph produces is consumed by",
+    "reshoot_ltx23_character.json, which loads it with LoraLoaderModelOnly in series with",
+    "the LTX 2.3 distilled LoRA -- therefore this graph trains on the LTX 2.3 22B",
+    "transformer. To train for a Flux-class or Qwen-Image base instead, swap nodes 3, 4 and",
+    "5 for that base's UNETLoader / DualCLIPLoader / VAELoader and drop learning_rate to",
+    "~1e-4 or lower; the dataset, training and saving wiring is unchanged. Do not expect one",
+    "adapter to serve both.",
+    "",
+    "PROVENANCE. Node names, input names, slot counts and defaults were read from ComfyUI",
+    "master source, not guessed (read 2026-10-29):",
+    "  comfy_extras/nodes_train.py     TrainLoraNode ('Train LoRA'), SaveLoRA",
+    "                                  ('Save LoRA Weights'), LossGraphNode",
+    "                                  ('Plot Loss Graph'), LoraModelLoader",
+    "  comfy_extras/nodes_dataset.py   MakeTrainingDataset ('Make Training Dataset'),",
+    "                                  LoadTrainingDataset, SaveTrainingDataset,",
+    "                                  ResolutionBucket, LoadImageDataSetFromFolder",
+    "  comfy_extras/nodes_primitive.py PrimitiveStringMultiline",
+    "  comfy/weight_adapter/__init__.py  the `algorithm` options: LoRA, LoHa, LoKr, OFT",
+    "  nodes.py                        UNETLoader, DualCLIPLoader, VAELoader",
+    "The upstream node ids are the class_types used below: in API format the id IS the",
+    "class_type, so 'Train LoRA' is TrainLoraNode and 'Save LoRA Weights' is SaveLoRA. The",
+    "display names are what the ComfyUI canvas shows; they are not what goes in this file.",
+    "Cross-checked against docs.comfy.org/built-in-nodes/TrainLoraNode.",
+    "",
+    "TWO TRAPS, BOTH DOCUMENTED, BOTH AVOIDED HERE:",
+    "  1. `steps` DEFAULTS TO 16. That is a smoke test -- it proves the graph executes, and",
+    "     it produces an adapter that has learned essentially nothing. A character set wants",
+    "     thousands of steps. This graph sets 2000, which is a starting point and not a",
+    "     tuned number: watch the loss graph and the sample renders, not the step count.",
+    "  2. `learning_rate` DEFAULTS TO 5e-4, which is SDXL-era. Flux-class and LTX-class",
+    "     bases want ~1e-4 or lower; 5e-4 on a 22B transformer is how you get a fried",
+    "     adapter that has memorised the reference set and destroys prompt adherence. This",
+    "     graph sets 1e-4.",
+    "  3. `bypass_mode` is set TRUE. Its own tooltip: 'adapters are applied via forward hooks",
+    "     instead of weight modification. Useful for quantized models where weights cannot be",
+    "     directly modified.' That is exactly our case -- node 3 loads an int8_convrot",
+    "     checkpoint, and the LTX graphs this adapter feeds load int8_convrot and fp8_scaled",
+    "     checkpoints. `training_dtype` is set to 'none' for the same reason: it preserves",
+    "     the model's native compute dtype instead of overriding it. `quantized_backward` is",
+    "     left at its default (false); turn it on only if backward through the quantized",
+    "     matmul is what you need. This combination is read off the node's own tooltips -- it",
+    "     is NOT taken from a worked example, and it is the single most likely thing in this",
+    "     file to need adjusting on the first real run.",
+    "",
+    "HONEST CAVEAT, and it belongs in the README rather than in a footnote. These training",
+    "nodes are marked EXPERIMENTAL in ComfyUI (is_experimental=True on every one of them) and",
+    "they shift between releases. The community default for serious character work is still",
+    "an external trainer -- ai-toolkit (MIT; FLUX.2 / Qwen-Image / Z-Image Turbo) or",
+    "diffusion-pipe. The native path is what makes this graph writable without a second",
+    "environment, a second toolchain or a second licence; it is not a claim that it is what",
+    "professionals use.",
+    "",
+    "WHAT THIS GRAPH DOES NOT DO:",
+    "  - It does not verify that the trained adapter holds the character's identity. Nothing",
+    "    here measures facial identity; that needs a vision model and is out of scope for",
+    "    this pack, exactly as the perceptual half of the framing rules is out of scope.",
+    "    The loss curve is a training diagnostic, not an identity verdict.",
+    "  - It does not caption per image. `texts` is one trigger-word caption repeated across",
+    "    the whole set (MakeTrainingDataset repeats a length-1 text list for every image).",
+    "    For per-image captions, put a .txt next to each image and use",
+    "    LoadImageTextDataSetFromFolder in place of node 1.",
+    "  - It does not bucket by resolution. bucket_mode is false and ResolutionBucket is not",
+    "    in the chain. For a variable-aspect reference set, insert ResolutionBucket between",
+    "    nodes 6 and 7 and set bucket_mode true on node 7; both slot counts are already in",
+    "    the validator's table.",
+    "  - It does not cache the encoded dataset. Insert SaveTrainingDataset after node 6 and",
+    "    swap node 6 for LoadTrainingDataset on later runs to skip re-encoding. Also already",
+    "    in the table.",
+    "",
+    "WHAT IS VERIFIED vs NOT:",
+    "  VERIFIED      valid JSON; class_type + inputs on every node; every link resolves to",
+    "                an existing node id and a declared output slot; every node supplies a",
+    "                legal number of inputs; acyclic; every node reachable from an output",
+    "                node (SaveLoRA / Plot Loss Graph, which declare no outputs).",
+    "  NOT VERIFIED  that ComfyUI accepts this prompt; that the weights below are installed;",
+    "                that training converges; that the adapter holds identity. None of that",
+    "                has been run.",
+    "",
+    "REQUIRED NODE PACKS (custom):",
+    "  NONE. Every class_type here is ComfyUI core, category model/training or model/loaders.",
+    "",
+    "REQUIRED WEIGHTS (paths as ComfyUI names them; the three LTX names are the same ones",
+    "reshoot_ltx_crossview.json already uses, so this graph adds no new download):",
+    "  models/diffusion_models/LTX2/ltx-2.3-22b-dev_transformer_only_int8_convrot.safetensors",
+    "  models/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
+    "  models/text_encoders/LTX2/ltx-2.3_text_projection_bf16.safetensors",
+    "  models/vae/ltx2/LTX23_video_vae_bf16.safetensors",
+    "INPUT: a folder of character reference stills under ComfyUI's input directory, named by",
+    "node 1's `folder` widget (placeholder: character_refs). PNG / JPG / JPEG / WEBP.",
+    "OUTPUT, and read this before looking for the file: SaveLoRA writes into ComfyUI's",
+    "OUTPUT directory, not into models/loras. With this prefix the adapter lands at",
+    "  output/loras/cinematographer/character_2000_steps_00001_.safetensors",
+    "(SaveLoRA appends the step count when its optional `steps` input is wired, as it is",
+    "here, and its default prefix is the similarly misleading 'loras/ComfyUI_trained_lora').",
+    "To load the adapter you must move or copy it into models/loras/ first -- that is what",
+    "reshoot_ltx23_character.json expects. The loss graph PNG goes to the output directory",
+    "as well, under cinematographer/.",
+    "",
+    "LICENCE. ComfyUI is GPL-3.0; the native training nodes are part of it. LTX 2.3 weights",
+    "are LTX-2.x Community (revenue-capped). No MiniMax H3 and no closed API anywhere in the",
+    "chain -- this graph trains entirely locally.",
+    "",
+    "MEASURED: nothing. No timing, no VRAM figure, no loss curve, no adapter. The reference",
+    "app this pipeline is modelled on was demonstrated on a 96 GB GPU; training a rank-32",
+    "adapter on a 22B int8 transformer with gradient checkpointing and bypass mode is",
+    "expected to be far lighter than that, but that is an expectation, not a measurement."
+  ],
+  "1": {
+    "class_type": "LoadImageDataSetFromFolder",
+    "inputs": {
+      "folder": "character_refs"
+    },
+    "_meta": {
+      "title": "Character reference stills (folder under ComfyUI/input)"
+    }
+  },
+  "2": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "ohwx person, character reference photo, neutral lighting, plain background"
+    },
+    "_meta": {
+      "title": "Trigger word + caption (repeated for every image)"
+    }
+  },
+  "3": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "LTX2/ltx-2.3-22b-dev_transformer_only_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Base to train on: LTX 2.3 22B (int8_convrot -> bypass_mode)"
+    }
+  },
+  "4": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
+      "clip_name2": "LTX2/ltx-2.3_text_projection_bf16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "LTX 2.3 text encoders"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ltx2/LTX23_video_vae_bf16.safetensors"
+    },
+    "_meta": {
+      "title": "Video VAE (encodes the stills)"
+    }
+  },
+  "6": {
+    "class_type": "MakeTrainingDataset",
+    "inputs": {
+      "images": [
+        "1",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ],
+      "texts": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Encode stills -> latents + conditioning"
+    }
+  },
+  "7": {
+    "class_type": "TrainLoraNode",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "latents": [
+        "6",
+        0
+      ],
+      "positive": [
+        "6",
+        1
+      ],
+      "batch_size": 1,
+      "grad_accumulation_steps": 4,
+      "steps": 2000,
+      "learning_rate": 0.0001,
+      "rank": 32,
+      "optimizer": "AdamW",
+      "loss_function": "MSE",
+      "seed": 42,
+      "training_dtype": "none",
+      "lora_dtype": "bf16",
+      "quantized_backward": false,
+      "algorithm": "LoRA",
+      "gradient_checkpointing": true,
+      "checkpoint_depth": 1,
+      "offloading": false,
+      "existing_lora": "[None]",
+      "bucket_mode": false,
+      "bypass_mode": true
+    },
+    "_meta": {
+      "title": "Train LoRA (steps 2000, lr 1e-4 -- NOT the 16 / 5e-4 defaults)"
+    }
+  },
+  "8": {
+    "class_type": "SaveLoRA",
+    "inputs": {
+      "lora": [
+        "7",
+        0
+      ],
+      "prefix": "loras/cinematographer/character",
+      "steps": [
+        "7",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Save LoRA Weights"
+    }
+  },
+  "9": {
+    "class_type": "LossGraphNode",
+    "inputs": {
+      "loss": [
+        "7",
+        1
+      ],
+      "filename_prefix": "cinematographer/character_lora_loss"
+    },
+    "_meta": {
+      "title": "Plot Loss Graph (off loss_map)"
+    }
+  }
+}
