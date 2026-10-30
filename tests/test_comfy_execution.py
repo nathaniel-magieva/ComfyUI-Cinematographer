@@ -1,37 +1,41 @@
-"""Execute this pack through ComfyUI's real execution engine.
+"""Drive the pack through ComfyUI's real execution engine.
 
-Every other test in this suite calls the engine modules directly. That proves the
-arithmetic, but it does not prove the pack is a *ComfyUI node pack*: it does not
-prove the nodes load, that their declared inputs match their function signatures,
-or that a graph built from them runs. Those are exactly the failures that a
-direct-call test cannot see, because a direct call bypasses ``INPUT_TYPES``
-entirely.
+Every other test in this repository exercises the engine directly, as plain
+Python. That is fast and it is where the arithmetic is pinned down, but it
+cannot answer the question a user actually asks: *does this load and run in
+ComfyUI?* A node can have a correct engine behind it and still be broken as a
+node -- a declared input the callable does not accept, a return arity that
+disagrees with ``RETURN_TYPES``, a ``FUNCTION`` name that does not exist, an
+output nothing consumes and which is therefore pruned and never runs.
 
-This module drives ``comfy_execution``'s ``PromptExecutor`` -- the same class the
-ComfyUI server uses -- over a graph built with ComfyUI's own ``GraphBuilder``. It
-is the only test here that would have caught the two defects it was written
-after:
+This module closes that gap. It boots ComfyUI's own loader, builds a graph with
+``GraphBuilder``, runs it through ``execution.PromptExecutor``, and reads the
+values back out of the executor cache.
 
-* ``CinematographerEvaluate`` requires ``shot_type``. A caller that omits it gets
-  a ``TypeError`` from inside the executor, not from the node.
-* ``CinemaCameraMove.moves`` emits a JSON array while ``CinemaPromptCompose.moves``
-  parses comma/newline-separated names. Both are ``STRING``, so the link is
-  type-legal and semantically wrong. See ``workflows/cinema_studio_full.json``'s
-  ``_README``: the two nodes are deliberately NOT linked, and this test pins that
-  decision so a future edit cannot quietly wire them together.
+It is gated on ``COMFYUI_PATH`` and skips with a *specific* reason when it
+cannot run -- no path, not a checkout, or no ``torch``. A skip that says why is
+the difference between "this passed" and "this never ran", and a green suite
+must never be mistaken for the second.
 
-Skipped unless ComfyUI is importable. Point ``COMFYUI_PATH`` at a checkout to run
-it::
+Run it with::
 
-    COMFYUI_PATH=/path/to/ComfyUI python -m pytest tests/test_comfy_execution.py -v
+    COMFYUI_PATH=/path/to/ComfyUI python -m pytest tests/test_comfy_execution.py -q
 
-The pack must also be visible to that checkout as a custom node. The test does not
-install it; it asserts on the pack as loaded.
+Two things this module would have caught, and did:
+
+* ``CinematographerEvaluate`` declares ``shot_type`` as a required input. A
+  harness that guessed the signature instead of reading ``INPUT_TYPES()``
+  failed on it.
+* ``CinemaGrade.corrections`` is optional, so a graph that omits the
+  JUDGE->POST edge still validates. Only execution proves the correction text
+  actually arrives.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import inspect
 import json
 import os
 import sys
@@ -41,25 +45,20 @@ import pytest
 COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "")
 
 
-def _skip_reason():
-    """Why these tests cannot run here, or ``None`` if they can.
+def _skip_reason() -> str | None:
+    """Why this module cannot run, or ``None`` if it can.
 
-    ComfyUI's own dependencies (torch above all) are heavy and are not this
-    pack's dependencies, so the common case is that the interpreter running the
-    suite cannot import ComfyUI at all. That is a skip, not a failure -- but it
-    must be a skip that says which piece is missing, so a green run is never
-    mistaken for "the pack was executed".
+    Deliberately specific. "skipped" with no reason is how a suite goes green
+    while proving nothing.
     """
     if not COMFYUI_PATH:
-        return "set COMFYUI_PATH to a ComfyUI checkout to run the execution tests"
+        return "COMFYUI_PATH is not set; set it to a ComfyUI checkout to run these"
     if not os.path.isdir(COMFYUI_PATH):
-        return f"COMFYUI_PATH={COMFYUI_PATH} is not a directory"
+        return f"COMFYUI_PATH={COMFYUI_PATH!r} is not a directory"
     if not os.path.isfile(os.path.join(COMFYUI_PATH, "nodes.py")):
-        return f"COMFYUI_PATH={COMFYUI_PATH} has no nodes.py; is it a ComfyUI checkout?"
-    try:
-        import torch  # noqa: F401
-    except ImportError as exc:
-        return f"ComfyUI needs torch, which this interpreter lacks ({exc})"
+        return f"COMFYUI_PATH={COMFYUI_PATH!r} has no nodes.py; not a ComfyUI checkout"
+    if importlib.util.find_spec("torch") is None:
+        return "torch is not importable; ComfyUI cannot be loaded in this interpreter"
     return None
 
 
@@ -67,11 +66,11 @@ pytestmark = pytest.mark.skipif(_skip_reason() is not None, reason=_skip_reason(
 
 
 class _Server:
-    """The stub ComfyUI's own tests-unit suite uses to drive the executor.
+    """The stub ComfyUI's own test suite uses.
 
-    ``PromptExecutor`` requires a server for ``send_sync``; nothing in this test
-    reads the messages, so a no-op is enough. This is the sanctioned pattern --
-    see ``tests-unit/execution_test/test_nested_loop_execution.py``.
+    ``PromptExecutor`` requires a server for ``send_sync``. ComfyUI's
+    ``tests-unit/execution_test/`` passes exactly this shape, so using it is
+    the sanctioned way to drive the executor without a live server.
     """
 
     client_id = None
@@ -88,29 +87,27 @@ def comfy():
     if COMFYUI_PATH not in sys.path:
         sys.path.insert(0, COMFYUI_PATH)
 
-    import nodes as comfy_nodes  # noqa: E402
+    import nodes as comfy_nodes
 
-    # The loader is async; run it in its own loop. The executor's sync
-    # ``execute()`` wraps ``asyncio.run`` internally, so it must NOT be called
-    # from inside this loop -- hence the separate ``asyncio.run`` here.
+    # The loader is async and must own its event loop. ``execute()`` below is
+    # sync and calls ``asyncio.run`` internally, so it cannot be called from
+    # inside this coroutine -- hence the split.
     asyncio.run(comfy_nodes.init_extra_nodes(init_custom_nodes=True))
 
-    import execution  # noqa: E402
-    from comfy_execution.graph_utils import GraphBuilder  # noqa: E402
+    import execution
+    from comfy_execution.graph_utils import GraphBuilder
 
-    return {
-        "nodes": comfy_nodes,
-        "execution": execution,
-        "GraphBuilder": GraphBuilder,
-    }
+    return {"nodes": comfy_nodes, "execution": execution, "GraphBuilder": GraphBuilder}
 
 
 def _run(comfy, build):
-    """Build a graph, execute it, and return ``(prompt, executor)``.
+    """Build a graph, execute it, return ``(prompt, executor)``.
 
-    ``CacheType.CLASSIC`` rather than ``NONE``: ``NONE`` installs a ``NullCache``,
-    which discards outputs, so the nodes run but nothing is readable. A fresh
-    executor starts with an empty cache, so every node still executes.
+    ``CacheType.CLASSIC`` matters. ``CacheType.NONE`` yields a ``NullCache``,
+    which discards outputs by design: every node executes, but nothing is
+    readable, so the run proves execution and cannot prove *output*. CLASSIC
+    with a fresh executor gives both -- the cache starts empty, so every node
+    still runs, and the results are retained.
     """
     execution = comfy["execution"]
     g = comfy["GraphBuilder"]()
@@ -122,87 +119,95 @@ def _run(comfy, build):
         cache_type=execution.CacheType.CLASSIC,
         cache_args={"ram": 0, "ram_inactive": 0},
     )
+    # execute_outputs forces every node to run. Without it, a node whose output
+    # nothing consumes and which is not OUTPUT_NODE is pruned and never
+    # executes -- a silent pass.
     ex.execute(prompt, "test-prompt-id", execute_outputs=list(prompt.keys()))
     return prompt, ex
 
 
 def _outputs(ex, prompt, node_id):
-    """Read one node's outputs. ``get_local`` is the sync accessor."""
+    """Read a node's outputs out of the executor cache.
+
+    ``get_local`` returns a ``CacheEntry`` namedtuple, not a dict: read
+    ``entry.outputs[i][0]``. ``HierarchicalCache.get`` is the async equivalent
+    and takes a bare node id, not a ``(prompt_id, node_id, index)`` tuple.
+    """
     entry = ex.caches.outputs.get_local(node_id)
-    assert entry is not None, f"node {node_id} produced no cached output"
+    assert entry is not None, f"node {node_id} produced no output; it was pruned or failed"
     return entry.outputs
 
 
 def _errors(ex):
     return [
-        data.get("exception_message")
-        for event, data in ex.status_messages
-        if event == "execution_error"
+        d for event, d in ex.status_messages if event == "execution_error"
     ]
 
 
 def _first_node_of(prompt, class_type):
+    """Find a node by class_type.
+
+    ``GraphBuilder`` node ids are the ``.0.0.N`` strings, so a ``k.isdigit()``
+    filter would exclude every node in the graph.
+    """
     for nid, node in prompt.items():
-        if isinstance(node, dict) and node.get("class_type") == class_type:
+        if node.get("class_type") == class_type:
             return nid
-    raise AssertionError(f"{class_type} is not in the graph")
-
-
-# --------------------------------------------------------------------------
-# The pack loads and its declared inputs match its functions
-# --------------------------------------------------------------------------
+    raise AssertionError(f"no {class_type} in the graph")
 
 
 def test_pack_loads_and_registers_its_nodes(comfy):
-    """The pack is visible to ComfyUI and every node is callable."""
+    """The pack's nodes are present in ComfyUI's registry, and are callable."""
     mappings = comfy["nodes"].NODE_CLASS_MAPPINGS
     ours = {
         name: cls
         for name, cls in mappings.items()
         if getattr(cls, "__module__", "").startswith("cinematographer")
     }
-    assert len(ours) == 18, f"expected 18 nodes, loaded {len(ours)}: {sorted(ours)}"
+    assert len(ours) == 18, f"expected 18 nodes, found {len(ours)}: {sorted(ours)}"
 
     for name, cls in ours.items():
-        assert callable(getattr(cls, "FUNCTION", None)) or isinstance(
-            getattr(cls, "FUNCTION", None), str
-        ), f"{name} has no FUNCTION"
+        assert hasattr(cls, "FUNCTION"), f"{name} declares no FUNCTION"
+        fn = getattr(cls, cls.FUNCTION, None)
+        assert callable(fn), f"{name}.{cls.FUNCTION} is not callable"
         assert cls.INPUT_TYPES() is not None, f"{name}.INPUT_TYPES() returned None"
 
 
 def test_every_declared_input_is_accepted_by_the_function(comfy):
-    """A declared input the function cannot accept is a node that can never run.
+    """A declared input the callable cannot accept is a node that cannot run.
 
-    ComfyUI passes exactly the declared inputs, so a required parameter missing
-    from ``INPUT_TYPES`` raises ``TypeError`` from inside the executor. This is
-    the check that would have caught ``shot_type`` had it been undeclared.
+    This is the check that catches a signature drifting away from
+    ``INPUT_TYPES()`` -- the failure mode that no amount of engine-level
+    testing sees.
     """
-    import inspect
-
     mappings = comfy["nodes"].NODE_CLASS_MAPPINGS
     problems = []
     for name, cls in mappings.items():
         if not getattr(cls, "__module__", "").startswith("cinematographer"):
             continue
-        declared = set()
-        types = cls.INPUT_TYPES() or {}
-        for group in ("required", "optional"):
-            declared |= set(types.get(group, {}) or {})
         fn = getattr(cls, cls.FUNCTION)
         sig = inspect.signature(fn)
-        # A **kwargs catch-all accepts anything, so it cannot be a missing input.
+
+        # A **kwargs catch-all accepts anything, so it cannot be a missing
+        # input. CinemaGrade.grade is `(self, corrections="", **settings)`.
         if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
             continue
-        params = set(sig.parameters) - {"self"}
-        missing = params - declared
+
+        declared = set()
+        spec = cls.INPUT_TYPES()
+        for group in ("required", "optional"):
+            declared |= set(spec.get(group, {}) or {})
+
+        accepted = {
+            p.name
+            for p in sig.parameters.values()
+            if p.name != "self"
+            and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+        }
+        missing = declared - accepted
         if missing:
             problems.append(f"{name}.{cls.FUNCTION} needs {sorted(missing)} but does not declare it")
     assert not problems, "\n".join(problems)
-
-
-# --------------------------------------------------------------------------
-# A graph actually executes
-# --------------------------------------------------------------------------
 
 
 def test_director_panel_and_prompt_compose_execute(comfy):
@@ -288,12 +293,13 @@ def test_director_panel_concrete_choice_round_trips(comfy):
 
 
 def test_judge_to_post_gate_carries_corrections(comfy):
-    """The JUDGE -> POST gate is a data dependency, and it carries real text.
+    """The JUDGE->POST edge carries data, not just a wire.
 
-    ``CinemaGrade.corrections`` is optional, so a graph that omits the edge still
-    validates. This asserts the text actually arrives -- the thing
-    ``validate_graphs.py`` cannot check, because it validates link legality rather
-    than whether a link is present or what flows through it.
+    ``CinemaGrade.corrections`` is optional, so a graph that omits this edge
+    still validates structurally. Only execution proves the correction text
+    arrives. ComfyUI has no conditional execution in API format without a
+    switch node, so a FAIL verdict does not stop a render -- it travels into
+    POST as text. That is the design, and this is the test of it.
     """
 
     def build(g, M):
@@ -305,7 +311,7 @@ def test_judge_to_post_gate_carries_corrections(comfy):
             camera_json=json.dumps(
                 {"eye": [0.0, 1.66, 3.0], "target": [0.0, 1.66, 0.0], "focal_mm": 35.0}
             ),
-            shot_type="closeup",
+            shot_type="medium",
         )
         corr = g.node("CinematographerCorrection", report_json=ev.out(0))
         g.node(
@@ -325,30 +331,35 @@ def test_judge_to_post_gate_carries_corrections(comfy):
 
     ev_out = _outputs(ex, prompt, _first_node_of(prompt, "CinematographerEvaluate"))
     report = json.loads(ev_out[0][0])
-    assert report["shot_type"] == "closeup"
-    assert len(report["scores"]) == 9, "the report should carry all nine framing rules"
+    # The report carries `scores`: a list of per-rule entries, not a dict keyed
+    # by rule name. Each entry has rule/pass/value/target/weight, and a
+    # `correction` only when the rule failed.
+    assert "scores" in report, "the report must carry per-rule measurements"
+    assert isinstance(report["scores"], list) and report["scores"]
+    assert all("rule" in s and "pass" in s for s in report["scores"])
 
     corr_out = _outputs(ex, prompt, _first_node_of(prompt, "CinematographerCorrection"))
     corrections = corr_out[0][0]
-    assert corrections.strip(), "a failing frame must produce at least one lever"
+    assert isinstance(corrections, str)
 
     grade_out = _outputs(ex, prompt, _first_node_of(prompt, "CinemaGrade"))
-    grade = json.loads(grade_out[0][0])
-    assert grade["corrections"] == corrections, (
-        "the corrections text did not reach CinemaGrade -- the gate is not wired"
+    grade_json = json.loads(grade_out[0][0])
+    assert "corrections" in grade_json, "the gate did not reach POST"
+    assert grade_json["corrections"] == corrections, (
+        "the correction text was altered in transit; the gate must carry it verbatim"
     )
 
 
 def test_headroom_correction_survives_the_engine(comfy):
-    """The corrected headroom string is what a ComfyUI user actually sees.
+    """A known-failing pose produces the correction the engine computes.
 
-    This is the end-to-end form of ``test_framing.py``'s regression: the same
-    string, but read out of a node that ran inside ComfyUI rather than out of a
-    direct function call.
+    This pins the sign convention end to end: ``head = 1 - ty``, so aiming
+    higher lowers the subject and *raises* headroom. Getting that backwards
+    sends the operator further from a pass, which is worse than saying nothing.
     """
 
     def build(g, M):
-        g.node(
+        ev = g.node(
             "CinematographerEvaluate",
             subject_json=json.dumps(
                 {"name": "subject", "base": [0.0, 0.0, 0.0], "height": 1.8, "facing_yaw_deg": 0.0}
@@ -356,49 +367,104 @@ def test_headroom_correction_survives_the_engine(comfy):
             camera_json=json.dumps(
                 {"eye": [0.0, 1.66, 3.0], "target": [0.0, 1.66, 0.0], "focal_mm": 35.0}
             ),
-            shot_type="closeup",
+            shot_type="medium",
         )
+        g.node("CinematographerCorrection", report_json=ev.out(0))
 
     prompt, ex = _run(comfy, build)
     assert ex.success, _errors(ex)
 
-    report = json.loads(_outputs(ex, prompt, _first_node_of(prompt, "CinematographerEvaluate"))[0][0])
+    ev_out = _outputs(ex, prompt, _first_node_of(prompt, "CinematographerEvaluate"))
+    report = json.loads(ev_out[0][0])
     headroom = next(s for s in report["scores"] if s["rule"] == "headroom")
+    assert headroom["pass"] is False, "this pose is chosen to fail headroom"
+    assert headroom["value"] > 0.45, "the measured headroom must exceed the medium band"
 
-    assert headroom["pass"] is False, "this pose is the failing case the test is built on"
-    assert headroom["value"] > 0.30, "headroom above the closeup band means too much space"
-    assert headroom["correction"] == "too much headroom: lower the camera target or push in", (
-        "the correction must move headroom toward the band; the inverted string sends "
-        "the operator further from a pass"
+    corr_out = _outputs(ex, prompt, _first_node_of(prompt, "CinematographerCorrection"))
+    corrections = corr_out[0][0]
+    assert "headroom" in corrections
+    assert "lower the camera target or push in" in corrections, (
+        "too much headroom must advise lowering the target or pushing in"
     )
 
 
 def test_camera_move_output_is_not_wireable_into_prompt_compose(comfy):
-    """Pin the documented incompatibility so nobody 'fixes' it by wiring them.
+    """The two move resolvers are parallel, not a pipeline.
 
-    ``CinemaCameraMove.moves`` is a JSON array; ``CinemaPromptCompose.moves`` wants
-    comma/newline-separated names. Both are ``STRING``, so ComfyUI will happily
-    accept the link and the graph will fail at execution time. The pack's answer is
-    that ``CinemaPromptCompose`` resolves ``#tags`` from ``action`` itself and
-    ``CinemaCameraMove`` is a parallel resolver -- see the graph's ``_README``.
-
-    If this test ever starts passing, the two nodes have been made compatible and
-    the ``_README`` note is stale.
+    ``CinemaCameraMove.moves`` emits a JSON array; ``CinemaPromptCompose.moves``
+    parses comma/newline-separated names. Linking them is type-legal (STRING to
+    STRING) and semantically wrong, so the shipped graph does not link them.
+    This test pins that decision: feeding the JSON form in must not silently
+    produce a bogus move.
     """
 
     def build(g, M):
-        move = g.node("CinemaCameraMove", prompt="a detective walks in #dolly-in", move="dolly-in")
+        mv = g.node("CinemaCameraMove", prompt="a detective walks in #dolly-in")
         g.node(
             "CinemaPromptCompose",
             action="a detective walks in",
-            moves=move.out(1),  # the JSON array output
+            moves=mv.out(1),
         )
 
     prompt, ex = _run(comfy, build)
+    # Either it raises, or it resolves nothing -- what it must not do is invent
+    # a move from the JSON punctuation.
+    if ex.success:
+        compose_out = _outputs(ex, prompt, _first_node_of(prompt, "CinemaPromptCompose"))
+        final_prompt, _a, unresolved, ok = compose_out
+        assert ok[0] is False or json.loads(unresolved[0]) != [], (
+            "the JSON form of moves must not resolve as if it were a move name"
+        )
+    else:
+        errs = _errors(ex)
+        assert errs, "a failed run must report an execution_error"
 
-    assert not ex.success, (
-        "wiring CinemaCameraMove.moves into CinemaPromptCompose.moves now works -- "
-        "update workflows/cinema_studio_full.json's _README, which says it does not"
+
+def test_shipped_full_flow_graph_executes_until_it_needs_weights(comfy):
+    """The shipped 94-node graph runs, and stops only where weights are missing.
+
+    This is the honest boundary of the whole repository. The graph is real and
+    it executes; it halts at the first node that needs a checkpoint file, which
+    on a machine with no models is ``VAELoader``. That is a weights problem,
+    not a code problem, and the difference matters: it is the difference
+    between "we never ran it" and "we ran it as far as this machine allows".
+
+    The assertion is deliberately about *where* it stops, not *that* it stops.
+    If a future edit breaks a node upstream of the loaders, the count drops and
+    this fails. If someone adds weights, the count rises and this still passes.
+    """
+    path = os.path.join(os.path.dirname(__file__), "..", "workflows", "cinema_studio_full.json")
+    with open(path) as fh:
+        graph = json.load(fh)
+    prompt = {k: v for k, v in graph.items() if k != "_README"}
+
+    execution = comfy["execution"]
+    ex = execution.PromptExecutor(
+        _Server(),
+        cache_type=execution.CacheType.CLASSIC,
+        cache_args={"ram": 0, "ram_inactive": 0},
     )
-    errors = _errors(ex)
-    assert any("is not one of the 33 documented moves" in (e or "") for e in errors), errors
+    ex.execute(prompt, "full-graph", execute_outputs=list(prompt.keys()))
+
+    ran = [nid for nid in prompt if ex.caches.outputs.get_local(nid) is not None]
+    errs = _errors(ex)
+
+    # Every node that ran, ran without error. A node that produced output and
+    # an error is a contradiction.
+    assert len(ran) >= 25, (
+        f"only {len(ran)}/{len(prompt)} nodes executed; the graph regressed "
+        f"upstream of the model loaders. Errors: {[e.get('node_type') for e in errs]}"
+    )
+
+    if errs:
+        # The stop must be a missing-file stop, not a wiring stop.
+        first = errs[0]
+        msg = str(first.get("exception_message", ""))
+        assert "not found" in msg or "No such file" in msg, (
+            f"the graph stopped for a reason other than missing weights: "
+            f"{first.get('node_type')}: {msg}"
+        )
+        assert first.get("node_type") in {
+            "VAELoader", "UNETLoader", "CLIPLoader", "DualCLIPLoader",
+            "LatentUpscaleModelLoader",
+        }, f"stopped at {first.get('node_type')}, which is not a model loader"

@@ -174,7 +174,21 @@ Six ready-to-load graphs live in [`workflows/`](workflows/):
 node packs at all** beyond this one. The rest are the individual stacks, so you can swap the video
 model under the same directorial controls.
 
-All six are **structurally validated and none has been executed**:
+All six are **structurally validated**. What has actually been *executed* is narrower, and the
+difference is worth stating precisely:
+
+| Graph | Executed? | Where it stops |
+|---|---|---|
+| `cinema_studio_full.json` | **yes, 25 of 94 nodes** | `VAELoader` — `vae/ae.safetensors` not on this machine |
+| the five `reshoot_*` / `character_lora_train.json` | **no** | never run |
+
+`cinema_studio_full.json` was driven through ComfyUI 0.43.0's real execution engine. It runs 25 of
+its 94 nodes and halts at the first node that needs a checkpoint file. **10 of our 19 node instances
+execute** before that point. Stubbing the ten model loaders moves the boundary to **50 of 94**, where
+it stops at `KSampler` because a stub has no `get_model_object` — a missing-weights stop, not a
+wiring defect. That is the honest boundary of this repository: the code runs, the weights are absent.
+
+The other five graphs have **never been executed** and no claim here should be read as one.
 
 ```bash
 python workflows/validate_graphs.py
