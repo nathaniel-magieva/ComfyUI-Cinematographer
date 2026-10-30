@@ -13,6 +13,10 @@ import * as C from './cinematographer.js';
 import * as P from './panel_state.js';
 import * as D from './director.js';
 import * as DP from './director_panel.js';
+import * as S from './studio.js';
+import * as EP from './elements_panel.js';
+import * as SP from './shoot_panel.js';
+import * as PP from './post_panel.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -689,10 +693,30 @@ function runAutoFrame() {
 }
 
 // ---------------------------------------------------------------------------
-// Tabs — Director (default) and Judge
+// Tabs — the five stages of Cinema Studio 4.0
 // ---------------------------------------------------------------------------
+//
+//   Director  Stage 3  the parameters
+//   Judge     the measurement that gates POST
+//   Elements  Stage 1 BUILD + Stage 2 ATTACH
+//   Shoot     Stage 4 PROMPT
+//   Post      Stage 5 POST
+//
+// The three later tabs are additive: `showTab` still coerces an unknown name to
+// 'director', and the Director and Judge panels are untouched.
 
-const TABS = ['director', 'judge'];
+const TABS = ['director', 'judge', 'elements', 'shoot', 'post'];
+
+const TAB_NOTES = {
+  director: 'The Director tab composes a plan. It does not generate anything.',
+  judge: 'The Judge tab measures a frame. It does not generate anything either.',
+  elements:
+    'The Elements tab names the cast and the sets. It writes no file — it shows what the node would write.',
+  shoot:
+    'The Shoot tab composes the prompt from the Director tab\'s parameters. It sends nothing.',
+  post:
+    'The Post tab describes a grade. CinemaGradeApply is what changes pixels, and it needs an image this panel does not have.',
+};
 
 function showTab(name) {
   if (!TABS.includes(name)) name = 'director';
@@ -706,18 +730,19 @@ function showTab(name) {
     btn.setAttribute('aria-selected', on ? 'true' : 'false');
   }
   const note = document.getElementById('tabnav-note');
-  if (note) {
-    note.textContent =
-      name === 'director'
-        ? 'The Director tab composes a plan. It does not generate anything.'
-        : 'The Judge tab measures a frame. It does not generate anything either.';
-  }
+  if (note) note.textContent = TAB_NOTES[name] ?? TAB_NOTES.director;
+
   // The viewport canvas has no size while its panel is hidden; re-measure on show.
   if (name === 'judge' && view) {
     view.resize();
     const data = P.compute(state);
     view.update(data.camera, data.report);
   }
+  // The later tabs read live state (the Director's moves, the Judge's report),
+  // so they re-render on show rather than holding a stale copy.
+  if (name === 'elements') EP.renderElements();
+  if (name === 'shoot') SP.renderShoot();
+  if (name === 'post') PP.renderPost();
 }
 
 function wireTabs() {
@@ -752,6 +777,11 @@ async function boot() {
     wireControls();
     render();
     DP.initDirectorPanel();
+    // The three later stages. Each reads the earlier tabs' live state rather
+    // than a copy, so they are initialised after the Director panel exists.
+    EP.initElementsPanel();
+    SP.initShootPanel();
+    PP.initPostPanel({ getReport: () => P.compute(state).report });
   } catch (err) {
     window.__panelErrors.push(`boot: ${err.message}`);
     throw err;
@@ -770,6 +800,10 @@ async function boot() {
     director: D,
     directorState: DP.directorState,
     directorPanel: DP,
+    studio: S,
+    elementsPanel: EP,
+    shootPanel: SP,
+    postPanel: PP,
     showTab,
   };
 

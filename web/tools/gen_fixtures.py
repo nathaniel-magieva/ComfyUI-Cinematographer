@@ -524,6 +524,348 @@ def director_fixtures() -> tuple[dict, list[str]]:
     return section, notes
 
 
+# ---------------------------------------------------------------------------
+# Stages 1 / 2 / 4 / 5 — the Elements, Shoot and Post tabs
+# ---------------------------------------------------------------------------
+#
+# `web/studio.js` mirrors `elements.py`, `post.py` and `nodes.py` for the four
+# stages the Director and Judge tabs do not cover. The values below are the
+# engine's own answers, so a drift in the mirror is a test failure rather than a
+# wrong number on screen.
+#
+# Error *prose* is deliberately NOT frozen. The engine raises on the first
+# problem and names it in a sentence; the panel collects every problem so a form
+# can show them all at once. What must agree is the accept/reject decision, so
+# for a rejected case the fixture freezes `ok: false` and `expected: null`, and
+# the checker compares only the decision.
+
+STUDIO_CONSTANTS = [
+    ("element_categories", "elements", "ELEMENT_CATEGORIES"),
+    ("grade_params", "post", "GRADE_PARAMS"),
+    ("grade_neutral", "post", "GRADE_NEUTRAL"),
+    ("grade_ranges", "post", "GRADE_RANGES"),
+    ("extend_modes", "post", "EXTEND_MODES"),
+    ("extend_duration_range", "post", "EXTEND_DURATION_RANGE"),
+    ("extend_overlap_max_frames", "post", "EXTEND_OVERLAP_MAX_FRAMES"),
+    ("post_rules", "post", "POST_RULES"),
+    ("post_rule_weights", "post", "POST_RULE_WEIGHTS"),
+]
+
+STUDIO_SIDECARS = [
+    "out/tamsin.png",
+    "out/tamsin",
+    "out/a.b.png",
+    ".bashrc",
+    "assets/tamsin.element.json",
+    "assets/tamsin.png",
+]
+
+STUDIO_PALETTES = [
+    "",
+    "0.82,0.61,0.55",
+    "0.82,0.61,0.55;0.11,0.09,0.08",
+    " 0.5 , 0.5 , 0.5 ;",
+    "0.82,0.61",
+]
+
+STUDIO_GRADES = [
+    {},
+    {"temperature": 0.2},
+    {"temperature": -0.2, "contrast": 0.4},
+    {"sharpness": 1.0, "film_grain": 0.25},
+    {"exposure": -2.0, "highlights": 1.0},
+    {
+        "saturation": 0.33,
+        "temperature": 0.1,
+        "contrast": -0.1,
+        "sharpness": 0.5,
+        "film_grain": 0.5,
+        "highlights": -0.5,
+        "exposure": 0.25,
+    },
+]
+
+STUDIO_EXTENDS = [
+    ("sequel", 5.0, 0),
+    ("prequel", 12.5, 24),
+    ("sequel", 4.0, 48),
+    ("prequel", 30.0, 0),
+    ("sideways", 5.0, 0),
+    ("sequel", 99.0, 0),
+    ("sequel", 5.0, 99),
+]
+
+STUDIO_EDITS = [
+    ("region", (-0.5, -0.5, 0.5, 0.5), "add rain"),
+    ("wide", (-1.5, -0.5, 0.5, 0.5), "spills past the frame"),
+    ("bad", (0.5, -0.5, -0.5, 0.5), "inverted box"),
+]
+
+STUDIO_POST_PLANS = [
+    ("neutral_no_extras", {}, None, None),
+    ("graded", {"temperature": 0.2, "exposure": -1.0}, None, None),
+    ("extend_only", {}, ("sequel", 5.0, 0), None),
+    ("edit_ok", {}, None, ("region", (-0.5, -0.5, 0.5, 0.5), "add rain")),
+    ("edit_blank_prompt", {}, None, ("region", (-0.5, -0.5, 0.5, 0.5), "")),
+    ("edit_out_of_frame", {}, None, ("wide", (-1.5, -0.5, 0.5, 0.5), "x")),
+]
+
+STUDIO_CORRECTION_REPORTS = [
+    {
+        "scores": [
+            {"rule": "headroom", "pass": False, "correction": "raise the camera"},
+            {"rule": "shot_size", "pass": False, "correction": "widen"},
+            {"rule": "level", "pass": True},
+        ]
+    },
+    {"scores": []},
+    {
+        "rules": {
+            "headroom": {"pass": False, "lever": "lower the camera"},
+            "level": {"passed": True},
+        }
+    },
+    {"corrections": "headroom: raise the camera\nlevel: level the horizon"},
+    {"corrections": ["a: one", "a: one", "b: two"]},
+    {
+        "issues": [
+            {
+                "rule": "180_axis",
+                "pass": False,
+                "shot_a": 1,
+                "shot_b": 2,
+                "detail": "crossed the line",
+            }
+        ]
+    },
+]
+
+STUDIO_REGISTRIES = [
+    [("the-diner", "location", "a.png"), ("Tamsin", "character", "b.png")],
+    [("z", "prop", "z.png"), ("a", "character", "a.png"), ("M", "character", "m.png")],
+]
+
+
+def studio_fixtures() -> tuple[dict, list[str]]:
+    """Build the `studio` fixture section, plus notes for the report."""
+    notes: list[str] = []
+    empty = {
+        "meta": {"python_present": False, "notes": notes},
+        "constants": [],
+        "sidecar": [],
+        "palette": [],
+        "grade": [],
+        "grade_summary": [],
+        "extend": [],
+        "edit": [],
+        "post_checks": [],
+        "corrections": [],
+        "registry": [],
+    }
+    try:
+        from cinematographer import elements as elements_mod
+        from cinematographer import nodes as nodes_mod
+        from cinematographer import post as post_mod
+    except Exception as exc:  # noqa: BLE001 - report, do not crash
+        notes.append(
+            f"engine modules not importable ({type(exc).__name__}: {exc}) — "
+            "the studio section is empty and the new tabs are UNCHECKED"
+        )
+        return empty, notes
+
+    mods = {"elements": elements_mod, "post": post_mod, "nodes": nodes_mod}
+
+    constants = []
+    for cid, mod_name, const_name in STUDIO_CONSTANTS:
+        value = getattr(mods[mod_name], const_name, None)
+        if value is None:
+            notes.append(f"{mod_name}.{const_name} not found — fixture skipped")
+            continue
+        if isinstance(value, dict):
+            value = {k: (list(v) if isinstance(v, (list, tuple)) else v) for k, v in value.items()}
+        elif isinstance(value, (list, tuple)):
+            value = list(value)
+        constants.append(
+            {
+                "id": f"const_{cid}",
+                "name": const_name,
+                "module": f"cinematographer/{mod_name}.py",
+                "expected": value,
+            }
+        )
+
+    sidecar = [
+        {
+            "id": f"sidecar_{i}",
+            "asset_path": path,
+            "expected": elements_mod.sidecar_path(path),
+        }
+        for i, path in enumerate(STUDIO_SIDECARS)
+    ]
+
+    palette = []
+    for i, text in enumerate(STUDIO_PALETTES):
+        try:
+            parsed = [list(c) for c in nodes_mod._parse_palette(text)]
+            palette.append(
+                {"id": f"palette_{i}", "text": text, "ok": True, "expected": parsed}
+            )
+        except ValueError:
+            palette.append(
+                {"id": f"palette_{i}", "text": text, "ok": False, "expected": None}
+            )
+
+    grade = []
+    grade_summary = []
+    for i, settings in enumerate(STUDIO_GRADES):
+        plan = post_mod.apply_grade(post_mod.GradeSettings(**settings))
+        grade.append(
+            {"id": f"grade_{i}", "settings": settings, "expected": plan.to_dict()}
+        )
+        grade_summary.append(
+            {"id": f"grade_{i}", "settings": settings, "expected": plan.summary()}
+        )
+
+    extend = []
+    for i, (mode, duration, overlap) in enumerate(STUDIO_EXTENDS):
+        try:
+            plan = post_mod.ExtendPlan(
+                mode=mode, duration_s=duration, overlap_frames=overlap
+            )
+            extend.append(
+                {
+                    "id": f"extend_{i}",
+                    "mode": mode,
+                    "duration_s": duration,
+                    "overlap_frames": overlap,
+                    "ok": True,
+                    "expected": plan.to_dict(),
+                }
+            )
+        except ValueError:
+            extend.append(
+                {
+                    "id": f"extend_{i}",
+                    "mode": mode,
+                    "duration_s": duration,
+                    "overlap_frames": overlap,
+                    "ok": False,
+                    "expected": None,
+                }
+            )
+
+    edit = []
+    for i, (label, bbox, prompt) in enumerate(STUDIO_EDITS):
+        try:
+            region = post_mod.EditRegion(label=label, bbox=bbox, prompt=prompt)
+            edit.append(
+                {
+                    "id": f"edit_{i}",
+                    "label": label,
+                    "bbox": list(bbox),
+                    "prompt": prompt,
+                    "ok": True,
+                    "expected": region.to_dict(),
+                }
+            )
+        except ValueError:
+            edit.append(
+                {
+                    "id": f"edit_{i}",
+                    "label": label,
+                    "bbox": list(bbox),
+                    "prompt": prompt,
+                    "ok": False,
+                    "expected": None,
+                }
+            )
+
+    post_checks = []
+    for cid, settings, ext, ed in STUDIO_POST_PLANS:
+        plan = post_mod.PostPlan(
+            grade=post_mod.apply_grade(post_mod.GradeSettings(**settings)),
+            extend=(
+                None
+                if ext is None
+                else post_mod.ExtendPlan(
+                    mode=ext[0], duration_s=ext[1], overlap_frames=ext[2]
+                )
+            ),
+            edit=(
+                None
+                if ed is None
+                else post_mod.EditPlan(
+                    regions=[post_mod.EditRegion(label=ed[0], bbox=ed[1], prompt=ed[2])]
+                )
+            ),
+        )
+        post_checks.append(
+            {
+                "id": f"checks_{cid}",
+                "grade": settings,
+                "extend": None if ext is None else list(ext),
+                "edit": None if ed is None else [ed[0], list(ed[1]), ed[2]],
+                "expected": [c.to_dict() for c in plan.checks()],
+            }
+        )
+
+    corrections = [
+        {
+            "id": f"corrections_{i}",
+            "report": report,
+            "expected": nodes_mod._corrections(report),
+        }
+        for i, report in enumerate(STUDIO_CORRECTION_REPORTS)
+    ]
+
+    registry = []
+    for i, rows in enumerate(STUDIO_REGISTRIES):
+        reg = elements_mod.ElementRegistry(
+            [
+                elements_mod.Element(name=name, category=category, asset_path=asset)
+                for name, category, asset in rows
+            ]
+        )
+        registry.append(
+            {
+                "id": f"registry_{i}",
+                "elements": [
+                    {"name": name, "category": category, "asset_path": asset}
+                    for name, category, asset in rows
+                ],
+                "expected": reg.to_dict(),
+            }
+        )
+
+    notes.append(
+        "error prose is NOT frozen: the engine raises on the first problem, the "
+        "panel collects them all. Only the accept/reject decision is compared."
+    )
+
+    section = {
+        "meta": {
+            "python_present": True,
+            "modules": [
+                "cinematographer/elements.py",
+                "cinematographer/post.py",
+                "cinematographer/nodes.py",
+            ],
+            "notes": notes,
+        },
+        "constants": constants,
+        "sidecar": sidecar,
+        "palette": palette,
+        "grade": grade,
+        "grade_summary": grade_summary,
+        "extend": extend,
+        "edit": edit,
+        "post_checks": post_checks,
+        "corrections": corrections,
+        "registry": registry,
+    }
+    return section, notes
+
+
 def engine_revision() -> str:
     """Best-effort git revision for provenance."""
     try:
@@ -602,6 +944,7 @@ def main() -> int:
         "reliability": [],
         "autoframe": [],
         "director": {},
+        "studio": {},
     }
 
     for fx in FRAMING:
@@ -661,6 +1004,9 @@ def main() -> int:
     director, director_notes = director_fixtures()
     data["director"] = director
 
+    studio, studio_notes = studio_fixtures()
+    data["studio"] = studio
+
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2)
         fh.write("\n")
@@ -678,6 +1024,22 @@ def main() -> int:
         )
     )
     for note in director_notes:
+        print(f"    note: {note}")
+    print(
+        "  studio: {c} constants, {s} sidecars, {p} palettes, {g} grades, "
+        "{x} extends, {d} edits, {k} post plans, {r} correction reports, {n} registries".format(
+            c=len(studio["constants"]),
+            s=len(studio["sidecar"]),
+            p=len(studio["palette"]),
+            g=len(studio["grade"]),
+            x=len(studio["extend"]),
+            d=len(studio["edit"]),
+            k=len(studio["post_checks"]),
+            r=len(studio["corrections"]),
+            n=len(studio["registry"]),
+        )
+    )
+    for note in studio_notes:
         print(f"    note: {note}")
     return 0
 

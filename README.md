@@ -190,25 +190,70 @@ list of what is mocked.
 
 Six ready-to-load graphs live in [`workflows/`](workflows/):
 
-| Graph | Stack | Licence |
-|---|---|---|
-| `cinema_studio_full.json` | The whole flow: Flux.1 [schnell] → Elements → Director → LTX 2.5 → judge → post | Apache-2.0 |
-| `reshoot_ltx25.json` | LTX 2.5 (official two-stage distilled, flattened) | LTX Community |
-| `reshoot_ltx_crossview.json` | LTX 2.3 + CrossView-Warp IC-LoRA + MoGe-2 | LTX Community / Apache-2.0 |
-| `reshoot_ltx23_character.json` | As above, plus a character LoRA | LTX Community / Apache-2.0 |
-| `reshoot_wan22_fun_control.json` | Wan 2.2 Fun-Control | Apache-2.0 |
-| `character_lora_train.json` | Native ComfyUI LoRA training on the LTX 2.3 transformer | Apache-2.0 |
+| Graph | Stack | Licence | Extra packs needed |
+|---|---|---|---|
+| `cinema_studio_full.json` | The whole flow: Flux.1 [schnell] → Elements → Director → LTX 2.5 → judge → post | Apache-2.0 | **none** |
+| `reshoot_ltx25.json` | LTX 2.5 (official two-stage distilled, flattened) | LTX Community | **none** |
+| `reshoot_ltx_crossview.json` | LTX 2.3 + CrossView-Warp IC-LoRA + MoGe-2 | LTX Community / Apache-2.0 | `cseti007/ComfyUI-CrossViewWarp` |
+| `reshoot_ltx23_character.json` | As above, plus a character LoRA | LTX Community / Apache-2.0 | `cseti007/ComfyUI-CrossViewWarp` |
+| `reshoot_wan22_fun_control.json` | Wan 2.2 Fun-Control | Apache-2.0 | `cseti007/ComfyUI-CrossViewWarp` |
+| `character_lora_train.json` | Native ComfyUI LoRA training on the LTX 2.3 transformer | Apache-2.0 | **none** |
 
 `cinema_studio_full.json` is the entry: it runs the five stages end to end and needs **no custom
 node packs at all** beyond this one. The rest are the individual stacks, so you can swap the video
 model under the same directorial controls.
+
+> **Read the last column before you load a graph.** Three of the six reference `CrossViewWarp`
+> (and two of those also `LTXAddVideoICLoRAGuide` / `LTXICLoRALoaderModelOnly`), which live in
+> **`cseti007/ComfyUI-CrossViewWarp`** — a third-party pack that is *not* vendored here. Load one
+> without it and ComfyUI refuses the prompt with
+> `missing_node_type: ... The custom node may not be installed.` That is measured, not inferred:
+> see the audit below. `cinema_studio_full.json` and `reshoot_ltx25.json` need nothing extra.
+
+**Measured against a live server.** POSTing each graph to `/prompt` makes ComfyUI validate every
+`class_type` before it runs anything, which answers "what would I have to install?" precisely:
+
+| Graph | Live-server verdict |
+|---|---|
+| `cinema_studio_full.json` | **HTTP 200 — accepted, queued, and `status_str: success`.** Every class_type registered. |
+| `reshoot_ltx25.json` | all class_types registered; rejected on missing model files and a placeholder image |
+| `reshoot_ltx_crossview.json` | **`missing_node_type`** — `CrossViewWarp`, `LTXAddVideoICLoRAGuide`, `LTXICLoRALoaderModelOnly` |
+| `reshoot_ltx23_character.json` | **`missing_node_type`** — the same three |
+| `reshoot_wan22_fun_control.json` | **`missing_node_type`** — `CrossViewWarp` |
+| `character_lora_train.json` | all class_types registered; rejected on missing model files and an absent `character_refs` folder |
+
+**Read that `success` carefully — it is not "the graph ran".** A live server *prunes* every branch
+that does not reach an output node, and with no weights on the machine it pruned all ten loaders,
+both `KSampler`s, both `VAEDecode`s, `SaveImage` and `SaveVideo`. What ran was the diagnostic
+branch: our own nodes, tapped by `PreviewAny`. Their values came back over HTTP, measured:
+
+| Node | Value returned by the live server |
+|---|---|
+| `CinematographerEvaluate` | `PASS medium on 'Tamsin' \| lead_room=-0.286` |
+| `CinematographerCorrection` | `lead_room: flip composition: leave space in the direction the subject faces` |
+| `CinemaGrade` | `grade: 5 delta(s) - temperature up 0.000->0.150, contrast up 0.000->0.100, …` |
+| `CinemaDirectorPanel` | `genre epic, era 1980s, pacing calm, camera 35mm-film, lens anamorphic, … @tamsin Joy 0.5` |
+| `CinemaCameraMove` | `["helicopter-shot"]` |
+| `CinemaPromptCompose` | `[]` — zero unresolved tags |
+
+> **A measurement trap worth knowing, because it nearly produced a false claim here.**
+> `history.outputs` lists only nodes that produced **UI** output. Our nodes return plain
+> `STRING`/`BOOLEAN` values, so they never appear as keys — a naive count of that dict reads
+> "0 of our 19 node instances ran", which is **false**. They ran; their results are visible only
+> through the `PreviewAny` taps. Count executions from the server log, not from `outputs`.
+
+Two of the rejections are worth calling out because they are *our* loose ends, not the user's:
+`reshoot_ltx25.json` carries a literal `PLACEHOLDER_SET_BY_THE_APP.png` in a `LoadImage`, and
+`character_lora_train.json` expects an input folder named `character_refs` that nothing creates.
+Both are deliberate placeholders for an app to fill in, and both will stop a user who loads the
+graph by hand. They are listed here rather than hidden.
 
 All six are **structurally validated**. What has actually been *executed* is narrower, and the
 difference is worth stating precisely:
 
 | Graph | Executed? | Where it stops |
 |---|---|---|
-| `cinema_studio_full.json` | **yes, 25 of 94 nodes** | `VAELoader` — `vae/ae.safetensors` not on this machine |
+| `cinema_studio_full.json` | **yes — two ways** | headless: 25 of 94, at `VAELoader` (no `vae/ae.safetensors`); live server: the weights branches are pruned, our nodes run |
 | the five `reshoot_*` / `character_lora_train.json` | **no** | never run |
 
 `cinema_studio_full.json` was driven through ComfyUI 0.43.0's real execution engine. It runs 25 of
@@ -216,6 +261,11 @@ its 94 nodes and halts at the first node that needs a checkpoint file. **10 of o
 execute** before that point. Stubbing the ten model loaders moves the boundary to **50 of 94**, where
 it stops at `KSampler` because a stub has no `get_model_object` — a missing-weights stop, not a
 wiring defect. That is the honest boundary of this repository: the code runs, the weights are absent.
+
+The same graph was then submitted to a **live server**, which behaves differently and is worth
+stating separately: it *prunes* rather than forcing execution, so the weights branches never start
+and our nodes run on their own. Same graph, same machine, two different honest answers — see the
+live-server table above for the values it returned.
 
 The other five graphs have **never been executed** and no claim here should be read as one.
 

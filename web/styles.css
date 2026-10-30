@@ -658,3 +658,64 @@ select.flagged { border-color: var(--fail); }
 }
 .emo-intensity input[type="range"] { flex: 1; min-width: 90px; }
 .emo-intensity output { font: 12px/1 var(--mono); color: var(--text); white-space: nowrap; }
+
+/* ==========================================================================
+   Stages 1 / 2 / 4 / 5 — the Elements, Shoot and Post tabs.
+   Additive only: nothing above this line is touched, so the Director and Judge
+   tabs render exactly as they did.
+   ========================================================================== */
+
+/* `.dim` was already used by the footer and by the Director tab's labels but had
+   no rule, so it rendered at full strength. This is the rule the name asks for. */
+.dim { color: var(--dim); }
+
+/* A control that spans the whole grid — used for textareas and long inputs. */
+.control-wide { grid-column: 1 / -1; }
+
+/* A taller output box for the composed prompt. */
+.plan-pre-tall { min-height: 92px; }
+
+/* The registry as a vertical list of rows rather than inline chips. */
+.registry-list-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.registry-item-block {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.registry-item-block .cat {
+  font-size: 11px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.registry-item-block .measurable {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.registry-item-block .measurable.yes { color: var(--pass); }
+.registry-item-block .measurable.no { color: var(--warn); }
+
+/* An unresolved tag is a failure, not a warning — it gets the fail colour. */
+.warn-item-bad {
+  border-left-color: var(--fail);
+  background: var(--fail-bg);
+  color: #f6c3c8;
+}
+
+/* The JUDGE -> POST gate badge. */
+.gate-badge {
+  font: 11px/1 var(--mono);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.gate-badge.open { border-color: var(--pass); background: var(--pass-bg); color: var(--pass); }
+.gate-badge.closed { border-color: var(--warn); background: rgba(242, 181, 60, 0.1); color: var(--warn); }

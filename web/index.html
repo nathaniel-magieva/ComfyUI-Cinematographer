@@ -39,6 +39,15 @@
   <button class="tab" data-tab="judge" role="tab" aria-selected="false" type="button">
     Judge <span class="tab-sub">measures the frame</span>
   </button>
+  <button class="tab" data-tab="elements" role="tab" aria-selected="false" type="button">
+    Elements <span class="tab-sub">builds the cast</span>
+  </button>
+  <button class="tab" data-tab="shoot" role="tab" aria-selected="false" type="button">
+    Shoot <span class="tab-sub">composes the prompt</span>
+  </button>
+  <button class="tab" data-tab="post" role="tab" aria-selected="false" type="button">
+    Post <span class="tab-sub">grades the take</span>
+  </button>
   <span class="tabnav-note" id="tabnav-note">
     The Director tab composes a plan. It does not generate anything.
   </span>
@@ -437,10 +446,424 @@
     </details>
   </section>
 </div>
+<!-- ============ TAB 3: ELEMENTS (Stage 1 BUILD + Stage 2 ATTACH) ========= -->
+<div id="tab-elements" class="tabpanel layout hidden">
+
+  <section class="col-left">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Register an Element</h2>
+        <span class="hint">Stage 1.3 ATTACH — <code>CinemaElementSave</code></span>
+      </div>
+      <p class="card-foot" style="margin-top:0">
+        An Element is a reference asset named once and tagged thereafter as
+        <code>@Name</code>. That reuse is what makes the five stages a pipeline rather than a
+        pile of graphs. The category list and every rule below come from
+        <code>cinematographer/elements.py</code>.
+      </p>
+
+      <div class="control-grid">
+        <div class="control">
+          <label for="e-name">Name</label>
+          <input id="e-name" type="text" value="tamsin" autocomplete="off" />
+        </div>
+        <div class="control">
+          <label for="e-category">Category</label>
+          <select id="e-category"></select>
+        </div>
+        <div class="control control-wide">
+          <label for="e-image-path">Asset path <span class="dim">(stored, never read)</span></label>
+          <input id="e-image-path" type="text" value="assets/tamsin.png" autocomplete="off" />
+        </div>
+        <div class="control control-wide">
+          <label for="e-description">Description</label>
+          <textarea id="e-description" rows="2"
+            placeholder="Who or what this is, in the words the model should see."></textarea>
+        </div>
+        <div class="control">
+          <label for="e-seed">Seed</label>
+          <input id="e-seed" type="number" value="0" min="0" step="1" />
+        </div>
+        <div class="control control-wide">
+          <label for="e-palette">
+            Palette <span class="dim">— <code>r,g,b;r,g,b</code> in 0..1. Empty means NOT MEASURED.</span>
+          </label>
+          <textarea id="e-palette" rows="2" placeholder="0.82,0.61,0.55;0.11,0.09,0.08"></textarea>
+        </div>
+      </div>
+
+      <div class="switch">
+        <input id="e-has-bbox" type="checkbox" />
+        <label for="e-has-bbox">
+          Store a bounding box <span class="dim">(unticked means NOT MEASURED, which is
+          distinguishable from a real box at the origin)</span>
+        </label>
+      </div>
+
+      <div class="control-grid" id="e-bbox-grid">
+        <div class="control">
+          <label for="e-bbox-min-x">bbox min x</label>
+          <input id="e-bbox-min-x" type="number" value="-0.3" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="e-bbox-min-y">bbox min y</label>
+          <input id="e-bbox-min-y" type="number" value="-0.9" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="e-bbox-max-x">bbox max x</label>
+          <input id="e-bbox-max-x" type="number" value="0.3" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="e-bbox-max-y">bbox max y</label>
+          <input id="e-bbox-max-y" type="number" value="0.9" min="-1" max="1" step="0.01" />
+        </div>
+      </div>
+
+      <div class="generate-row">
+        <button id="e-add" class="btn btn-primary" type="button">Add to the registry</button>
+        <button id="e-reset" class="btn btn-ghost" type="button">Reset to the shipped demo</button>
+      </div>
+      <div id="e-errors" class="warn-list"></div>
+      <p class="card-foot" id="e-save-note">
+        The engine's <code>CinemaElementSave</code> writes a sidecar next to the asset and updates
+        <code id="e-registry-path">cinematographer/elements.json</code>. This panel is a static page
+        with no server, so it does <strong>not</strong> write either file — it shows you exactly what
+        the node would write.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>The registry</h2>
+        <span class="hint" id="e-count">—</span>
+      </div>
+      <div id="e-registry" class="registry-list registry-list-block"></div>
+      <p class="card-foot">
+        This is the same registry the Director tab tags against and the Shoot tab resolves — add an
+        Element here and <code>@Name</code> starts resolving on both.
+      </p>
+    </div>
+
+  </section>
+
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What Stage 4 will resolve</h2>
+        <span class="hint">the tag, and the token it becomes</span>
+      </div>
+      <div id="e-tag" class="tag-chips"></div>
+      <p class="card-foot">
+        <code>@Name</code> is the <em>app's</em> surface syntax. The API's own reference token is
+        <code>&lt;&lt;&lt;image_1&gt;&gt;&gt;</code>-style, assigned in attachment order — the Shoot
+        tab shows that translation.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Measurability</h2>
+        <span class="hint">can identity continuity measure this Element?</span>
+      </div>
+      <div id="e-measurable" class="zone-row"></div>
+      <p class="card-foot">
+        <code>elements.character_record_from_element</code> <strong>raises</strong> for an Element
+        with no palette or no bbox. Such an Element still feeds the prompt, but appearance drift
+        cannot be measured against it — so the panel says so rather than showing a green tick it
+        cannot justify.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What the node would write</h2>
+        <span class="hint">computed, not typed</span>
+      </div>
+      <div class="control">
+        <label>Sidecar path <span class="dim">— <code>elements.sidecar_path</code></span></label>
+        <pre class="plan-pre" id="e-sidecar">—</pre>
+      </div>
+      <div class="control">
+        <label>Summary <span class="dim">— the node's third output</span></label>
+        <pre class="plan-pre" id="e-summary">—</pre>
+      </div>
+      <details class="card json-card">
+        <summary>element_json <span class="dim">— the sidecar record</span></summary>
+        <pre id="e-element-json">{}</pre>
+      </details>
+      <details class="card json-card">
+        <summary>registry document <span class="dim">— what <code>ElementRegistry.save</code> writes</span></summary>
+        <pre id="e-registry-json">{}</pre>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Provenance</h2></div>
+      <p class="card-foot" id="e-provenance">—</p>
+    </div>
+
+  </section>
+</div>
+
+<!-- ================= TAB 4: SHOOT (Stage 4 PROMPT) ====================== -->
+<div id="tab-shoot" class="tabpanel layout hidden">
+
+  <section class="col-left">
+
+    <div class="card prompt-card">
+      <div class="card-head">
+        <h2>Action</h2>
+        <span class="hint">Stage 4 PROMPT — <code>CinemaPromptCompose</code></span>
+      </div>
+      <textarea id="s-action" class="prompt-input" rows="4"
+        placeholder="A detective crosses the diner at 2am, @tamsincamp in the doorway"></textarea>
+      <div id="s-tags" class="tag-chips"></div>
+      <div class="registry-row">
+        <span class="registry-label">Elements in this project:</span>
+        <span id="s-registry" class="registry-list"></span>
+      </div>
+      <p class="card-foot">
+        This is the <strong>same</strong> tag machinery the Director tab uses — one parser, not two.
+        The move stack and the panel fragment are the Director tab's too, so what you set there is
+        what gets composed here.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What the Director tab contributes</h2>
+        <span class="hint">read live from the Director state</span>
+      </div>
+      <div class="control">
+        <label>Move stack <span class="dim">— in run order</span></label>
+        <div id="s-moves" class="registry-list"></div>
+      </div>
+      <div class="control">
+        <label>Panel fragment <span class="dim">— <code>director.panel_prompt_fragment</code></span></label>
+        <pre class="plan-pre" id="s-panel-fragment">—</pre>
+      </div>
+      <p class="card-foot">
+        The Python node assembles <em>action, then panel fragment, then <code>@</code> tags, then
+        <code>#</code> tags — and nothing else</em>. It adds no descriptive prose of its own.
+      </p>
+    </div>
+
+  </section>
+
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Composed prompt</h2>
+        <span class="hint" id="s-ok">—</span>
+      </div>
+      <pre class="plan-pre plan-pre-tall" id="s-final">—</pre>
+      <p class="card-foot">
+        <code>final_prompt</code> — the first output of <code>CinemaPromptCompose</code>.
+      </p>
+    </div>
+
+    <div class="card" id="s-unresolved-card">
+      <div class="card-head">
+        <h2>Unresolved tags</h2>
+        <span class="hint" id="s-unresolved-count">—</span>
+      </div>
+      <div id="s-unresolved" class="warn-list"></div>
+      <p class="card-foot">
+        An unresolved tag is a <strong>value on the result</strong>, not an exception — the engine
+        reports it so a graph can show you what is broken. It is never silently dropped and never
+        silently repaired.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Attachments</h2>
+        <span class="hint" id="s-attach-count">—</span>
+      </div>
+      <div id="s-attachments" class="attach-list"></div>
+      <p class="card-foot">
+        <code>attachments_json</code> — each resolved <code>@Element</code> becomes one API
+        reference token, numbered in the order it first appears.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Provenance</h2></div>
+      <p class="card-foot" id="s-provenance">—</p>
+    </div>
+
+  </section>
+</div>
+
+<!-- ================== TAB 5: POST (Stage 5 POST) ======================== -->
+<div id="tab-post" class="tabpanel layout hidden">
+
+  <section class="col-left">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Grade</h2>
+        <span class="hint">Stage 5 POST — <code>CinemaGrade</code></span>
+      </div>
+      <div id="p-grade-controls" class="control-grid"></div>
+      <div class="generate-row">
+        <button id="p-reset" class="btn btn-ghost" type="button">Reset to neutral</button>
+      </div>
+      <p class="card-foot">
+        The seven controls, their ranges and their neutral points all come from
+        <code>cinematographer/post.py</code>. A control left at neutral contributes
+        <strong>no delta</strong>, so the graph leaves it at the model's own default.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Extend</h2>
+        <span class="hint">Sequel / Prequel — <code>CinemaExtend</code></span>
+      </div>
+      <div class="switch">
+        <input id="p-extend-on" type="checkbox" />
+        <label for="p-extend-on">Plan an extension</label>
+      </div>
+      <div class="control-grid">
+        <div class="control">
+          <label for="p-extend-mode">Mode</label>
+          <select id="p-extend-mode"></select>
+        </div>
+        <div class="control">
+          <label for="p-extend-duration">Duration <span class="dim">s</span></label>
+          <input id="p-extend-duration" type="number" value="5" min="4" max="30" step="0.5" />
+        </div>
+        <div class="control">
+          <label for="p-extend-overlap">Overlap <span class="dim">frames</span></label>
+          <input id="p-extend-overlap" type="number" value="0" min="0" max="48" step="1" />
+        </div>
+      </div>
+      <p class="card-foot">
+        In the real product this is a separate Seedance call, not a Cinema Studio endpoint. This
+        record describes the request; it does not make it.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Regional edit</h2>
+        <span class="hint">NDC box + instruction — <code>CinemaEdit</code></span>
+      </div>
+      <div class="switch">
+        <input id="p-edit-on" type="checkbox" />
+        <label for="p-edit-on">Plan a regional edit</label>
+      </div>
+      <div class="control-grid">
+        <div class="control control-wide">
+          <label for="p-edit-label">Label</label>
+          <input id="p-edit-label" type="text" value="region" autocomplete="off" />
+        </div>
+        <div class="control">
+          <label for="p-edit-min-x">min x</label>
+          <input id="p-edit-min-x" type="number" value="-0.5" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="p-edit-min-y">min y</label>
+          <input id="p-edit-min-y" type="number" value="-0.5" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="p-edit-max-x">max x</label>
+          <input id="p-edit-max-x" type="number" value="0.5" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control">
+          <label for="p-edit-max-y">max y</label>
+          <input id="p-edit-max-y" type="number" value="0.5" min="-1" max="1" step="0.01" />
+        </div>
+        <div class="control control-wide">
+          <label for="p-edit-prompt">What to change inside the box</label>
+          <textarea id="p-edit-prompt" rows="2"
+            placeholder="Add rain on the window behind her."></textarea>
+        </div>
+      </div>
+      <p class="card-foot">
+        A box that spills past the frame is allowed and reported as a non-gating flag. A box with
+        min greater than max is <strong>rejected</strong> — that is a bug, not a choice.
+      </p>
+    </div>
+
+  </section>
+
+  <section class="col-right">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>JUDGE → POST gate</h2>
+        <span class="hint" id="p-gate">—</span>
+      </div>
+      <pre class="plan-pre" id="p-corrections">—</pre>
+      <p class="card-foot">
+        <code>CinemaGrade</code> takes the judge's verdict as its <code>corrections</code> input and
+        carries it into <code>grade_json</code>. It does not interpret the verdict — it
+        <strong>requires</strong> it, so POST cannot execute without the judge having executed. The
+        text below is produced by the same rule <code>CinematographerCorrection</code> uses, from the
+        Judge tab's live report.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Grade plan</h2>
+        <span class="hint" id="p-neutral">—</span>
+      </div>
+      <pre class="plan-pre" id="p-summary">—</pre>
+      <details class="card json-card" open>
+        <summary>grade_json <span class="dim">— <code>CinemaGrade</code>'s first output</span></summary>
+        <pre id="p-grade-json">{}</pre>
+      </details>
+      <p class="card-foot">
+        <code>CinemaGradeApply</code> is the node that changes pixels, and it takes an
+        <code>IMAGE</code>. This panel has no image and no render, so the plan stops here — the
+        footer says the same thing.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>POST audit</h2>
+        <span class="hint" id="p-overall">—</span>
+      </div>
+      <div id="p-checks" class="rules"></div>
+      <p class="card-foot">
+        The four <code>POST_RULES</code>, in engine order. <code>edit_region_in_frame</code> carries
+        weight 0.5, so it is reported but cannot fail a plan.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Extend &amp; edit plans</h2>
+        <span class="hint">computed from the engine's ranges</span>
+      </div>
+      <details class="card json-card">
+        <summary>extend_json</summary>
+        <pre id="p-extend-json">{}</pre>
+      </details>
+      <details class="card json-card">
+        <summary>edit_json</summary>
+        <pre id="p-edit-json">{}</pre>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Provenance</h2></div>
+      <p class="card-foot" id="p-provenance">—</p>
+    </div>
+
+  </section>
+</div>
 </main>
 
 <footer class="footer">
-  <span id="provenance">geometry: web/cinematographer.js ↔ cinematographer/ (Python)</span>
+  <span id="provenance">geometry: web/cinematographer.js ↔ cinematographer/ (Python) · stages 1/2/4/5: web/studio.js ↔ cinematographer/ (Python)</span>
   <span class="dim">No render is wired to a live ComfyUI in this panel — see README.md.</span>
 </footer>
 

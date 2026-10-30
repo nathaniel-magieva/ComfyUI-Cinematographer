@@ -299,3 +299,65 @@ def test_a_bad_input_is_reported_as_our_error_not_a_silent_pass():
     assert "ComfyUI-Cinematographer" in errs[0]["exception_message"], (
         "the error must name the pack so a user knows whose node failed"
     )
+
+
+# --------------------------------------------------------------------------
+# What the shipped graphs would need installed
+# --------------------------------------------------------------------------
+# Class types the shipped graphs use that live in a third-party pack this repo
+# does not vendor. Measured against a live server: three graphs reference
+# CrossViewWarp, and two of those also the two LTX IC-LoRA helpers. The README
+# names the pack (`cseti007/ComfyUI-CrossViewWarp`) in its graph table.
+EXTERNAL_CLASS_TYPES = {
+    "CrossViewWarp",
+    "LTXAddVideoICLoRAGuide",
+    "LTXICLoRALoaderModelOnly",
+}
+
+
+def _graphs():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wf = os.path.join(root, "workflows")
+    out = {}
+    for name in sorted(os.listdir(wf)):
+        if not name.endswith(".json"):
+            continue
+        with open(os.path.join(wf, name)) as fh:
+            g = json.load(fh)
+        out[name] = {k: v for k, v in g.items() if k != "_README"}
+    return out
+
+
+def test_every_graph_class_type_is_registered_or_a_documented_external():
+    """A graph must not silently depend on a pack nobody was told to install.
+
+    If a future edit adds a node from an uninstalled pack, this fails and names
+    it, instead of shipping a graph that dies with ``missing_node_type`` the
+    first time a user loads it.
+    """
+    info = _get("/object_info")
+    problems = []
+    for name, nodes in _graphs().items():
+        for nid, node in nodes.items():
+            ct = node["class_type"]
+            if ct in info or ct in EXTERNAL_CLASS_TYPES:
+                continue
+            problems.append(f"{name} node {nid}: {ct}")
+    assert not problems, (
+        "these graphs reference class types that are neither registered on the "
+        "server nor listed in EXTERNAL_CLASS_TYPES: " + "; ".join(problems)
+    )
+
+
+def test_the_entry_graph_needs_no_extra_packs():
+    """`cinema_studio_full.json` is the entry; it must run on a bare install."""
+    info = _get("/object_info")
+    nodes = _graphs()["cinema_studio_full.json"]
+    external = sorted(
+        {n["class_type"] for n in nodes.values()
+         if n["class_type"] not in info and n["class_type"] in EXTERNAL_CLASS_TYPES}
+    )
+    assert external == [], (
+        f"the entry graph now needs third-party packs: {external}. "
+        "The README claims it needs none."
+    )

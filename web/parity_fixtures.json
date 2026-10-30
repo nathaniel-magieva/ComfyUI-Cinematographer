@@ -1,9 +1,9 @@
 {
   "meta": {
     "generated_by": "web/tools/gen_fixtures.py",
-    "generated_at": "2026-10-30T14:57:07+00:00",
+    "generated_at": "2026-10-30T18:46:49+00:00",
     "engine": "cinematographer/ (Python)",
-    "engine_revision": "unknown",
+    "engine_revision": "f00597c",
     "engine_hash_sha256": "fc3204378a5134be8e04e3495c97730f47ced178a3c1ab4c2b49e31fbcad39e3",
     "engine_hash_modules": [
       "geometry.py",
@@ -2859,6 +2859,1006 @@
         "resolution": "1080p",
         "expected_credits": 480,
         "source": "Cinema Studio 4.0 credit table (first-party), pricing checked 2026-10-24; corroborated for 10 s 720p and 30 s 1080p by the 2026-10-28 press release"
+      }
+    ]
+  },
+  "studio": {
+    "meta": {
+      "python_present": true,
+      "modules": [
+        "cinematographer/elements.py",
+        "cinematographer/post.py",
+        "cinematographer/nodes.py"
+      ],
+      "notes": [
+        "error prose is NOT frozen: the engine raises on the first problem, the panel collects them all. Only the accept/reject decision is compared."
+      ]
+    },
+    "constants": [
+      {
+        "id": "const_element_categories",
+        "name": "ELEMENT_CATEGORIES",
+        "module": "cinematographer/elements.py",
+        "expected": [
+          "character",
+          "location",
+          "prop"
+        ]
+      },
+      {
+        "id": "const_grade_params",
+        "name": "GRADE_PARAMS",
+        "module": "cinematographer/post.py",
+        "expected": [
+          "temperature",
+          "contrast",
+          "saturation",
+          "sharpness",
+          "film_grain",
+          "highlights",
+          "exposure"
+        ]
+      },
+      {
+        "id": "const_grade_neutral",
+        "name": "GRADE_NEUTRAL",
+        "module": "cinematographer/post.py",
+        "expected": {
+          "temperature": 0.0,
+          "contrast": 0.0,
+          "saturation": 0.0,
+          "sharpness": 0.0,
+          "film_grain": 0.0,
+          "highlights": 0.0,
+          "exposure": 0.0
+        }
+      },
+      {
+        "id": "const_grade_ranges",
+        "name": "GRADE_RANGES",
+        "module": "cinematographer/post.py",
+        "expected": {
+          "temperature": [
+            -1.0,
+            1.0
+          ],
+          "contrast": [
+            -1.0,
+            1.0
+          ],
+          "saturation": [
+            -1.0,
+            1.0
+          ],
+          "sharpness": [
+            0.0,
+            1.0
+          ],
+          "film_grain": [
+            0.0,
+            1.0
+          ],
+          "highlights": [
+            -1.0,
+            1.0
+          ],
+          "exposure": [
+            -2.0,
+            2.0
+          ]
+        }
+      },
+      {
+        "id": "const_extend_modes",
+        "name": "EXTEND_MODES",
+        "module": "cinematographer/post.py",
+        "expected": [
+          "sequel",
+          "prequel"
+        ]
+      },
+      {
+        "id": "const_extend_duration_range",
+        "name": "EXTEND_DURATION_RANGE",
+        "module": "cinematographer/post.py",
+        "expected": [
+          4.0,
+          30.0
+        ]
+      },
+      {
+        "id": "const_extend_overlap_max_frames",
+        "name": "EXTEND_OVERLAP_MAX_FRAMES",
+        "module": "cinematographer/post.py",
+        "expected": 48
+      },
+      {
+        "id": "const_post_rules",
+        "name": "POST_RULES",
+        "module": "cinematographer/post.py",
+        "expected": [
+          "grade_in_range",
+          "extend_in_range",
+          "edit_prompt_present",
+          "edit_region_in_frame"
+        ]
+      },
+      {
+        "id": "const_post_rule_weights",
+        "name": "POST_RULE_WEIGHTS",
+        "module": "cinematographer/post.py",
+        "expected": {
+          "grade_in_range": 1.0,
+          "extend_in_range": 1.0,
+          "edit_prompt_present": 1.0,
+          "edit_region_in_frame": 0.5
+        }
+      }
+    ],
+    "sidecar": [
+      {
+        "id": "sidecar_0",
+        "asset_path": "out/tamsin.png",
+        "expected": "out/tamsin.element.json"
+      },
+      {
+        "id": "sidecar_1",
+        "asset_path": "out/tamsin",
+        "expected": "out/tamsin.element.json"
+      },
+      {
+        "id": "sidecar_2",
+        "asset_path": "out/a.b.png",
+        "expected": "out/a.b.element.json"
+      },
+      {
+        "id": "sidecar_3",
+        "asset_path": ".bashrc",
+        "expected": ".bashrc.element.json"
+      },
+      {
+        "id": "sidecar_4",
+        "asset_path": "assets/tamsin.element.json",
+        "expected": "assets/tamsin.element.element.json"
+      },
+      {
+        "id": "sidecar_5",
+        "asset_path": "assets/tamsin.png",
+        "expected": "assets/tamsin.element.json"
+      }
+    ],
+    "palette": [
+      {
+        "id": "palette_0",
+        "text": "",
+        "ok": true,
+        "expected": []
+      },
+      {
+        "id": "palette_1",
+        "text": "0.82,0.61,0.55",
+        "ok": true,
+        "expected": [
+          [
+            0.82,
+            0.61,
+            0.55
+          ]
+        ]
+      },
+      {
+        "id": "palette_2",
+        "text": "0.82,0.61,0.55;0.11,0.09,0.08",
+        "ok": true,
+        "expected": [
+          [
+            0.82,
+            0.61,
+            0.55
+          ],
+          [
+            0.11,
+            0.09,
+            0.08
+          ]
+        ]
+      },
+      {
+        "id": "palette_3",
+        "text": " 0.5 , 0.5 , 0.5 ;",
+        "ok": true,
+        "expected": [
+          [
+            0.5,
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      {
+        "id": "palette_4",
+        "text": "0.82,0.61",
+        "ok": false,
+        "expected": null
+      }
+    ],
+    "grade": [
+      {
+        "id": "grade_0",
+        "settings": {},
+        "expected": {
+          "deltas": [],
+          "count": 0,
+          "is_noop": true
+        }
+      },
+      {
+        "id": "grade_1",
+        "settings": {
+          "temperature": 0.2
+        },
+        "expected": {
+          "deltas": [
+            {
+              "param": "temperature",
+              "from": 0.0,
+              "to": 0.2,
+              "direction": "up"
+            }
+          ],
+          "count": 1,
+          "is_noop": false
+        }
+      },
+      {
+        "id": "grade_2",
+        "settings": {
+          "temperature": -0.2,
+          "contrast": 0.4
+        },
+        "expected": {
+          "deltas": [
+            {
+              "param": "temperature",
+              "from": 0.0,
+              "to": -0.2,
+              "direction": "down"
+            },
+            {
+              "param": "contrast",
+              "from": 0.0,
+              "to": 0.4,
+              "direction": "up"
+            }
+          ],
+          "count": 2,
+          "is_noop": false
+        }
+      },
+      {
+        "id": "grade_3",
+        "settings": {
+          "sharpness": 1.0,
+          "film_grain": 0.25
+        },
+        "expected": {
+          "deltas": [
+            {
+              "param": "sharpness",
+              "from": 0.0,
+              "to": 1.0,
+              "direction": "up"
+            },
+            {
+              "param": "film_grain",
+              "from": 0.0,
+              "to": 0.25,
+              "direction": "up"
+            }
+          ],
+          "count": 2,
+          "is_noop": false
+        }
+      },
+      {
+        "id": "grade_4",
+        "settings": {
+          "exposure": -2.0,
+          "highlights": 1.0
+        },
+        "expected": {
+          "deltas": [
+            {
+              "param": "highlights",
+              "from": 0.0,
+              "to": 1.0,
+              "direction": "up"
+            },
+            {
+              "param": "exposure",
+              "from": 0.0,
+              "to": -2.0,
+              "direction": "down"
+            }
+          ],
+          "count": 2,
+          "is_noop": false
+        }
+      },
+      {
+        "id": "grade_5",
+        "settings": {
+          "saturation": 0.33,
+          "temperature": 0.1,
+          "contrast": -0.1,
+          "sharpness": 0.5,
+          "film_grain": 0.5,
+          "highlights": -0.5,
+          "exposure": 0.25
+        },
+        "expected": {
+          "deltas": [
+            {
+              "param": "temperature",
+              "from": 0.0,
+              "to": 0.1,
+              "direction": "up"
+            },
+            {
+              "param": "contrast",
+              "from": 0.0,
+              "to": -0.1,
+              "direction": "down"
+            },
+            {
+              "param": "saturation",
+              "from": 0.0,
+              "to": 0.33,
+              "direction": "up"
+            },
+            {
+              "param": "sharpness",
+              "from": 0.0,
+              "to": 0.5,
+              "direction": "up"
+            },
+            {
+              "param": "film_grain",
+              "from": 0.0,
+              "to": 0.5,
+              "direction": "up"
+            },
+            {
+              "param": "highlights",
+              "from": 0.0,
+              "to": -0.5,
+              "direction": "down"
+            },
+            {
+              "param": "exposure",
+              "from": 0.0,
+              "to": 0.25,
+              "direction": "up"
+            }
+          ],
+          "count": 7,
+          "is_noop": false
+        }
+      }
+    ],
+    "grade_summary": [
+      {
+        "id": "grade_0",
+        "settings": {},
+        "expected": "grade: neutral (no deltas)"
+      },
+      {
+        "id": "grade_1",
+        "settings": {
+          "temperature": 0.2
+        },
+        "expected": "grade: 1 delta(s) - temperature up 0.000->0.200"
+      },
+      {
+        "id": "grade_2",
+        "settings": {
+          "temperature": -0.2,
+          "contrast": 0.4
+        },
+        "expected": "grade: 2 delta(s) - temperature down 0.000->-0.200, contrast up 0.000->0.400"
+      },
+      {
+        "id": "grade_3",
+        "settings": {
+          "sharpness": 1.0,
+          "film_grain": 0.25
+        },
+        "expected": "grade: 2 delta(s) - sharpness up 0.000->1.000, film_grain up 0.000->0.250"
+      },
+      {
+        "id": "grade_4",
+        "settings": {
+          "exposure": -2.0,
+          "highlights": 1.0
+        },
+        "expected": "grade: 2 delta(s) - highlights up 0.000->1.000, exposure down 0.000->-2.000"
+      },
+      {
+        "id": "grade_5",
+        "settings": {
+          "saturation": 0.33,
+          "temperature": 0.1,
+          "contrast": -0.1,
+          "sharpness": 0.5,
+          "film_grain": 0.5,
+          "highlights": -0.5,
+          "exposure": 0.25
+        },
+        "expected": "grade: 7 delta(s) - temperature up 0.000->0.100, contrast down 0.000->-0.100, saturation up 0.000->0.330, sharpness up 0.000->0.500, film_grain up 0.000->0.500, highlights down 0.000->-0.500, exposure up 0.000->0.250"
+      }
+    ],
+    "extend": [
+      {
+        "id": "extend_0",
+        "mode": "sequel",
+        "duration_s": 5.0,
+        "overlap_frames": 0,
+        "ok": true,
+        "expected": {
+          "mode": "sequel",
+          "duration_s": 5.0,
+          "overlap_frames": 0,
+          "overlap_s": 0.0
+        }
+      },
+      {
+        "id": "extend_1",
+        "mode": "prequel",
+        "duration_s": 12.5,
+        "overlap_frames": 24,
+        "ok": true,
+        "expected": {
+          "mode": "prequel",
+          "duration_s": 12.5,
+          "overlap_frames": 24,
+          "overlap_s": 1.0
+        }
+      },
+      {
+        "id": "extend_2",
+        "mode": "sequel",
+        "duration_s": 4.0,
+        "overlap_frames": 48,
+        "ok": true,
+        "expected": {
+          "mode": "sequel",
+          "duration_s": 4.0,
+          "overlap_frames": 48,
+          "overlap_s": 2.0
+        }
+      },
+      {
+        "id": "extend_3",
+        "mode": "prequel",
+        "duration_s": 30.0,
+        "overlap_frames": 0,
+        "ok": true,
+        "expected": {
+          "mode": "prequel",
+          "duration_s": 30.0,
+          "overlap_frames": 0,
+          "overlap_s": 0.0
+        }
+      },
+      {
+        "id": "extend_4",
+        "mode": "sideways",
+        "duration_s": 5.0,
+        "overlap_frames": 0,
+        "ok": false,
+        "expected": null
+      },
+      {
+        "id": "extend_5",
+        "mode": "sequel",
+        "duration_s": 99.0,
+        "overlap_frames": 0,
+        "ok": false,
+        "expected": null
+      },
+      {
+        "id": "extend_6",
+        "mode": "sequel",
+        "duration_s": 5.0,
+        "overlap_frames": 99,
+        "ok": false,
+        "expected": null
+      }
+    ],
+    "edit": [
+      {
+        "id": "edit_0",
+        "label": "region",
+        "bbox": [
+          -0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "prompt": "add rain",
+        "ok": true,
+        "expected": {
+          "label": "region",
+          "bbox": [
+            -0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "prompt": "add rain",
+          "in_frame": true
+        }
+      },
+      {
+        "id": "edit_1",
+        "label": "wide",
+        "bbox": [
+          -1.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "prompt": "spills past the frame",
+        "ok": true,
+        "expected": {
+          "label": "wide",
+          "bbox": [
+            -1.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "prompt": "spills past the frame",
+          "in_frame": false
+        }
+      },
+      {
+        "id": "edit_2",
+        "label": "bad",
+        "bbox": [
+          0.5,
+          -0.5,
+          -0.5,
+          0.5
+        ],
+        "prompt": "inverted box",
+        "ok": false,
+        "expected": null
+      }
+    ],
+    "post_checks": [
+      {
+        "id": "checks_neutral_no_extras",
+        "grade": {},
+        "extend": null,
+        "edit": null,
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "no extension requested"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every edit region names what to change"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": true,
+            "weight": 0.5,
+            "detail": "every edit region is inside the NDC frame"
+          }
+        ]
+      },
+      {
+        "id": "checks_graded",
+        "grade": {
+          "temperature": 0.2,
+          "exposure": -1.0
+        },
+        "extend": null,
+        "edit": null,
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "no extension requested"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every edit region names what to change"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": true,
+            "weight": 0.5,
+            "detail": "every edit region is inside the NDC frame"
+          }
+        ]
+      },
+      {
+        "id": "checks_extend_only",
+        "grade": {},
+        "extend": [
+          "sequel",
+          5.0,
+          0
+        ],
+        "edit": null,
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "sequel 5.0s, overlap 0 frame(s)"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every edit region names what to change"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": true,
+            "weight": 0.5,
+            "detail": "every edit region is inside the NDC frame"
+          }
+        ]
+      },
+      {
+        "id": "checks_edit_ok",
+        "grade": {},
+        "extend": null,
+        "edit": [
+          "region",
+          [
+            -0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "add rain"
+        ],
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "no extension requested"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every edit region names what to change"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": true,
+            "weight": 0.5,
+            "detail": "every edit region is inside the NDC frame"
+          }
+        ]
+      },
+      {
+        "id": "checks_edit_blank_prompt",
+        "grade": {},
+        "extend": null,
+        "edit": [
+          "region",
+          [
+            -0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          ""
+        ],
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "no extension requested"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": false,
+            "weight": 1.0,
+            "detail": "edit region(s) with no prompt: region"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": true,
+            "weight": 0.5,
+            "detail": "every edit region is inside the NDC frame"
+          }
+        ]
+      },
+      {
+        "id": "checks_edit_out_of_frame",
+        "grade": {},
+        "extend": null,
+        "edit": [
+          "wide",
+          [
+            -1.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "x"
+        ],
+        "expected": [
+          {
+            "rule": "grade_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every grade delta target is inside its legal range"
+          },
+          {
+            "rule": "extend_in_range",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "no extension requested"
+          },
+          {
+            "rule": "edit_prompt_present",
+            "pass": true,
+            "weight": 1.0,
+            "detail": "every edit region names what to change"
+          },
+          {
+            "rule": "edit_region_in_frame",
+            "pass": false,
+            "weight": 0.5,
+            "detail": "edit region(s) outside the NDC frame: wide"
+          }
+        ]
+      }
+    ],
+    "corrections": [
+      {
+        "id": "corrections_0",
+        "report": {
+          "scores": [
+            {
+              "rule": "headroom",
+              "pass": false,
+              "correction": "raise the camera"
+            },
+            {
+              "rule": "shot_size",
+              "pass": false,
+              "correction": "widen"
+            },
+            {
+              "rule": "level",
+              "pass": true
+            }
+          ]
+        },
+        "expected": [
+          "headroom: raise the camera",
+          "shot_size: widen"
+        ]
+      },
+      {
+        "id": "corrections_1",
+        "report": {
+          "scores": []
+        },
+        "expected": []
+      },
+      {
+        "id": "corrections_2",
+        "report": {
+          "rules": {
+            "headroom": {
+              "pass": false,
+              "lever": "lower the camera"
+            },
+            "level": {
+              "passed": true
+            }
+          }
+        },
+        "expected": [
+          "headroom: lower the camera"
+        ]
+      },
+      {
+        "id": "corrections_3",
+        "report": {
+          "corrections": "headroom: raise the camera\nlevel: level the horizon"
+        },
+        "expected": [
+          "headroom: raise the camera",
+          "level: level the horizon"
+        ]
+      },
+      {
+        "id": "corrections_4",
+        "report": {
+          "corrections": [
+            "a: one",
+            "a: one",
+            "b: two"
+          ]
+        },
+        "expected": [
+          "a: one",
+          "b: two"
+        ]
+      },
+      {
+        "id": "corrections_5",
+        "report": {
+          "issues": [
+            {
+              "rule": "180_axis",
+              "pass": false,
+              "shot_a": 1,
+              "shot_b": 2,
+              "detail": "crossed the line"
+            }
+          ]
+        },
+        "expected": [
+          "180_axis (shot 1->2): crossed the line"
+        ]
+      }
+    ],
+    "registry": [
+      {
+        "id": "registry_0",
+        "elements": [
+          {
+            "name": "the-diner",
+            "category": "location",
+            "asset_path": "a.png"
+          },
+          {
+            "name": "Tamsin",
+            "category": "character",
+            "asset_path": "b.png"
+          }
+        ],
+        "expected": {
+          "categories": [
+            "character",
+            "location",
+            "prop"
+          ],
+          "elements": [
+            {
+              "name": "Tamsin",
+              "category": "character",
+              "asset_path": "b.png",
+              "description": "",
+              "seed": 0,
+              "palette": [],
+              "bbox": null,
+              "created_utc": ""
+            },
+            {
+              "name": "the-diner",
+              "category": "location",
+              "asset_path": "a.png",
+              "description": "",
+              "seed": 0,
+              "palette": [],
+              "bbox": null,
+              "created_utc": ""
+            }
+          ]
+        }
+      },
+      {
+        "id": "registry_1",
+        "elements": [
+          {
+            "name": "z",
+            "category": "prop",
+            "asset_path": "z.png"
+          },
+          {
+            "name": "a",
+            "category": "character",
+            "asset_path": "a.png"
+          },
+          {
+            "name": "M",
+            "category": "character",
+            "asset_path": "m.png"
+          }
+        ],
+        "expected": {
+          "categories": [
+            "character",
+            "location",
+            "prop"
+          ],
+          "elements": [
+            {
+              "name": "a",
+              "category": "character",
+              "asset_path": "a.png",
+              "description": "",
+              "seed": 0,
+              "palette": [],
+              "bbox": null,
+              "created_utc": ""
+            },
+            {
+              "name": "M",
+              "category": "character",
+              "asset_path": "m.png",
+              "description": "",
+              "seed": 0,
+              "palette": [],
+              "bbox": null,
+              "created_utc": ""
+            },
+            {
+              "name": "z",
+              "category": "prop",
+              "asset_path": "z.png",
+              "description": "",
+              "seed": 0,
+              "palette": [],
+              "bbox": null,
+              "created_utc": ""
+            }
+          ]
+        }
       }
     ]
   }

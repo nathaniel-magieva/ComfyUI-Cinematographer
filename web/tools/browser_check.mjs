@@ -543,6 +543,385 @@ try {
     console.log(`  info samples rgb: ${gl.pts.map((p) => `(${p.join(',')})`).join(' ')}`);
   }
 
+  // ========== ELEMENTS TAB (Stage 1 BUILD + Stage 2 ATTACH) ==========
+  console.log('\n[E1] Elements tab — the registry and the engine\'s categories');
+  await evaluate(`document.querySelector('#tabnav [data-tab="elements"]').click(), true`);
+  await sleep(300);
+  const elTab = await evaluate(`(() => ({
+    visible: !document.getElementById('tab-elements').classList.contains('hidden'),
+    judgeHidden: document.getElementById('tab-judge').classList.contains('hidden'),
+    onTab: document.querySelector('#tabnav .tab.on')?.dataset.tab,
+    note: document.getElementById('tabnav-note').textContent.trim(),
+    categories: [...document.getElementById('e-category').options].map(o => o.value),
+    engineCategories: window.__cinematographer.studio.ELEMENT_CATEGORIES,
+    rows: document.querySelectorAll('#e-registry .registry-item').length,
+    count: document.getElementById('e-count').textContent.trim(),
+  }))()`);
+  ok(elTab.visible, 'the Elements tab becomes visible');
+  ok(elTab.judgeHidden, 'the Judge tab hides');
+  ok(elTab.onTab === 'elements', 'the Elements tab button is selected', elTab.onTab);
+  ok(/writes no file/.test(elTab.note), 'the tab bar says the Elements tab writes no file', elTab.note);
+  ok(
+    elTab.categories.join('|') === elTab.engineCategories.join('|'),
+    "the category list is the engine's ELEMENT_CATEGORIES",
+    elTab.categories.join(','),
+  );
+  ok(elTab.rows === 3, 'the demo registry renders 3 Elements', String(elTab.rows));
+  ok(/3 Element/.test(elTab.count), 'the count line reports 3 Elements', elTab.count);
+
+  console.log('\n[E2] Elements tab — validation is the engine\'s, and it rejects');
+  const badPalette = await evaluate(`(() => {
+    const el = document.getElementById('e-palette');
+    el.value = '0.82,0.61';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      errors: [...document.querySelectorAll('#e-errors .warn-item')].map(e => e.textContent.trim()),
+      sidecar: document.getElementById('e-sidecar').textContent.trim(),
+    };
+  })()`);
+  ok(
+    badPalette.errors.length === 1 && /three comma-separated/.test(badPalette.errors[0] ?? ''),
+    "a two-channel palette entry is rejected with the engine's rule",
+    badPalette.errors[0] ?? '(none)',
+  );
+  ok(badPalette.sidecar === '—', 'no sidecar path is shown for an invalid record', badPalette.sidecar);
+
+  const inverted = await evaluate(`(() => {
+    const p = document.getElementById('e-palette');
+    p.value = '0.82,0.61,0.55';
+    p.dispatchEvent(new Event('input', { bubbles: true }));
+    const box = document.getElementById('e-has-bbox');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    const mx = document.getElementById('e-bbox-min-x');
+    mx.value = '0.9';
+    mx.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      errors: [...document.querySelectorAll('#e-errors .warn-item')].map(e => e.textContent.trim()),
+    };
+  })()`);
+  ok(
+    inverted.errors.some((e) => /inverted/.test(e)),
+    'an inverted bbox is rejected',
+    inverted.errors.join(' | ') || '(none)',
+  );
+
+  const validEl = await evaluate(`(() => {
+    const mx = document.getElementById('e-bbox-min-x');
+    mx.value = '-0.3';
+    mx.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      errors: [...document.querySelectorAll('#e-errors .warn-item')].map(e => e.textContent.trim()),
+      sidecar: document.getElementById('e-sidecar').textContent.trim(),
+      summary: document.getElementById('e-summary').textContent.trim(),
+      json: JSON.parse(document.getElementById('e-element-json').textContent),
+      measurable: document.getElementById('e-measurable').textContent.trim(),
+    };
+  })()`);
+  ok(
+    validEl.errors.length === 1 && /Valid/.test(validEl.errors[0] ?? ''),
+    'a valid record is accepted',
+    validEl.errors[0] ?? '(none)',
+  );
+  ok(validEl.sidecar === 'assets/tamsin.element.json', 'the sidecar path is computed', validEl.sidecar);
+  ok(
+    validEl.json.palette.length === 1 && validEl.json.palette[0].join(',') === '0.82,0.61,0.55',
+    'element_json carries the parsed palette',
+    JSON.stringify(validEl.json.palette),
+  );
+  ok(
+    Array.isArray(validEl.json.bbox) && validEl.json.bbox.length === 4,
+    'element_json carries the bbox',
+    JSON.stringify(validEl.json.bbox),
+  );
+  ok(
+    /MEASURABLE/.test(validEl.measurable) && !/NOT MEASURABLE/.test(validEl.measurable),
+    'with a palette and a bbox the Element is measurable',
+    validEl.measurable.slice(0, 48),
+  );
+
+  console.log('\n[E3] Elements tab — adding an Element changes what the other tabs resolve');
+  const added = await evaluate(`(() => {
+    const n = document.getElementById('e-name');
+    n.value = 'the-rooftop';
+    n.dispatchEvent(new Event('input', { bubbles: true }));
+    const c = document.getElementById('e-category');
+    c.value = 'location';
+    c.dispatchEvent(new Event('change', { bubbles: true }));
+    const p = document.getElementById('e-image-path');
+    p.value = 'assets/the-rooftop.png';
+    p.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('e-add').click();
+    return {
+      rows: document.querySelectorAll('#e-registry .registry-item').length,
+      directorRegistry: document.getElementById('d-registry').textContent,
+      directorCount: window.__cinematographer.directorPanel.getRegistry().length,
+    };
+  })()`);
+  ok(added.rows === 4, 'the new Element appears in the Elements registry', String(added.rows));
+  ok(added.directorCount === 4, 'the Director tab shares the same registry', String(added.directorCount));
+  ok(
+    /the-rooftop/.test(added.directorRegistry),
+    'the Director tab shows the new Element',
+    added.directorRegistry.trim().slice(0, 60),
+  );
+
+  const elReset = await evaluate(`(() => {
+    document.getElementById('e-reset').click();
+    return {
+      rows: document.querySelectorAll('#e-registry .registry-item').length,
+      directorCount: window.__cinematographer.directorPanel.getRegistry().length,
+    };
+  })()`);
+  ok(
+    elReset.rows === 3 && elReset.directorCount === 3,
+    'Reset restores the shipped demo registry on both tabs',
+    `${elReset.rows} / ${elReset.directorCount}`,
+  );
+
+  // ================= SHOOT TAB (Stage 4 PROMPT) =================
+  console.log('\n[S1] Shoot tab — the composed prompt resolves @Element to the API token');
+  await evaluate(`document.querySelector('#tabnav [data-tab="shoot"]').click(), true`);
+  await sleep(300);
+  const shoot = await evaluate(`(() => ({
+    visible: !document.getElementById('tab-shoot').classList.contains('hidden'),
+    onTab: document.querySelector('#tabnav .tab.on')?.dataset.tab,
+    note: document.getElementById('tabnav-note').textContent.trim(),
+    action: document.getElementById('s-action').value,
+    final: document.getElementById('s-final').textContent,
+    attachments: [...document.querySelectorAll('#s-attachments .attach-item')].map(e => e.textContent.trim()),
+    unresolved: document.getElementById('s-unresolved').textContent.trim(),
+    okBadge: document.getElementById('s-ok').textContent.trim(),
+  }))()`);
+  ok(shoot.visible && shoot.onTab === 'shoot', 'the Shoot tab becomes visible and is selected');
+  ok(/sends nothing/.test(shoot.note), 'the tab bar says the Shoot tab sends nothing', shoot.note);
+  ok(/@tamsincamp/.test(shoot.action), 'the action carries an @Element tag', shoot.action);
+  ok(/<<<image_1>>>/.test(shoot.final), 'the tag resolved to the API reference token', shoot.final);
+  ok(!/@tamsincamp/.test(shoot.final), 'the raw @tag is gone from the composed prompt');
+  ok(shoot.attachments.length === 1, 'one attachment is reported', String(shoot.attachments.length));
+  ok(/tamsincamp/.test(shoot.attachments[0] ?? ''), 'the attachment names the Element', shoot.attachments[0] ?? '');
+  ok(
+    /assets\/tamsin\.png/.test(shoot.attachments[0] ?? ''),
+    "the attachment shows the node's asset_path field",
+    shoot.attachments[0] ?? '',
+  );
+  ok(/Every tag resolved/.test(shoot.unresolved), 'a fully-resolved prompt says so', shoot.unresolved.slice(0, 48));
+  ok(/true/.test(shoot.okBadge), 'the ok output is true', shoot.okBadge);
+
+  console.log('\n[S2] Shoot tab — an unresolved tag is a visible failure, not a silent drop');
+  const unresolved = await evaluate(`(() => {
+    const a = document.getElementById('s-action');
+    a.value = 'A detective crosses the diner, @tamsincamp and @nobody at all';
+    a.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      final: document.getElementById('s-final').textContent,
+      bad: [...document.querySelectorAll('#s-unresolved .warn-item-bad')].map(e => e.textContent.trim()),
+      count: document.getElementById('s-unresolved-count').textContent.trim(),
+      okBadge: document.getElementById('s-ok').textContent.trim(),
+      chips: [...document.querySelectorAll('#s-tags .tag-chip')].map(e => e.className),
+    };
+  })()`);
+  ok(unresolved.bad.length === 1, 'exactly one unresolved tag is reported', String(unresolved.bad.length));
+  ok(
+    /no Element named "nobody"/.test(unresolved.bad[0] ?? ''),
+    'the reason names the missing Element',
+    unresolved.bad[0] ?? '(none)',
+  );
+  ok(/@nobody/.test(unresolved.final), 'the unresolved tag stays literal in the prompt', unresolved.final);
+  ok(/false/.test(unresolved.okBadge), 'the ok output is false', unresolved.okBadge);
+  ok(unresolved.chips.includes('tag-chip bad'), 'the tag chip renders in the failure colour', unresolved.chips.join(' '));
+  ok(/1 unresolved/.test(unresolved.count), 'the unresolved count is on screen', unresolved.count);
+
+  console.log('\n[S3] Shoot tab — it reuses the Director tab\'s move stack, not a copy');
+  const moves = await evaluate(`(() => {
+    document.querySelector('#tabnav [data-tab="director"]').click();
+    // The Director tab may already carry moves from the earlier [D3] checks, so
+    // this measures the DELTA rather than assuming an empty stack.
+    const before = window.__cinematographer.directorState.moves.length;
+    const sel = document.getElementById('d-move-add');
+    sel.value = sel.options[0].value;
+    document.getElementById('d-move-add-btn').click();
+    const stacked = window.__cinematographer.directorState.moves.slice();
+    document.querySelector('#tabnav [data-tab="shoot"]').click();
+    return {
+      before,
+      stacked,
+      last: stacked[stacked.length - 1],
+      final: document.getElementById('s-final').textContent,
+      shown: document.getElementById('s-moves').textContent.trim(),
+      fragment: document.getElementById('s-panel-fragment').textContent,
+    };
+  })()`);
+  ok(
+    moves.stacked.length === moves.before + 1,
+    'the Director tab stacked one more move',
+    `${moves.before} -> ${moves.stacked.length}`,
+  );
+  ok(
+    moves.final.trim().endsWith('#' + moves.last),
+    "the Shoot tab appends the Director's move tags, in order",
+    moves.final.slice(-48),
+  );
+  ok(moves.shown.includes('#' + moves.last), "the Shoot tab shows the Director's move stack", moves.shown);
+  ok(/camera_movement/.test(moves.fragment), 'the panel fragment carries the move group', moves.fragment.slice(0, 56));
+
+  // ================== POST TAB (Stage 5 POST) ==================
+  console.log('\n[P1] Post tab — the seven controls are the engine\'s GRADE_PARAMS');
+  await evaluate(`document.querySelector('#tabnav [data-tab="post"]').click(), true`);
+  await sleep(300);
+  const post = await evaluate(`(() => {
+    const S = window.__cinematographer.studio;
+    const sliders = [...document.querySelectorAll('#p-grade-controls input[type=range]')];
+    return {
+      visible: !document.getElementById('tab-post').classList.contains('hidden'),
+      onTab: document.querySelector('#tabnav .tab.on')?.dataset.tab,
+      note: document.getElementById('tabnav-note').textContent.trim(),
+      sliderIds: sliders.map(e => e.id.replace('p-grade-', '')),
+      engineParams: S.GRADE_PARAMS,
+      ranges: sliders.map(e => [e.min, e.max]),
+      engineRanges: S.GRADE_PARAMS.map(p => S.GRADE_RANGES[p].map(String)),
+      neutral: document.getElementById('p-neutral').textContent.trim(),
+      summary: document.getElementById('p-summary').textContent.trim(),
+      json: JSON.parse(document.getElementById('p-grade-json').textContent),
+      checks: [...document.querySelectorAll('#p-checks .rule-name')].map(e => e.textContent),
+      engineRules: S.POST_RULES,
+      weights: [...document.querySelectorAll('#p-checks .rule-weight')].map(e => e.textContent.trim()),
+      overall: document.getElementById('p-overall').textContent.trim(),
+    };
+  })()`);
+  ok(post.visible && post.onTab === 'post', 'the Post tab becomes visible and is selected');
+  ok(/CinemaGradeApply/.test(post.note), 'the tab bar names the node that actually changes pixels', post.note);
+  ok(
+    post.sliderIds.join('|') === post.engineParams.join('|'),
+    'the seven sliders are GRADE_PARAMS in order',
+    post.sliderIds.join(','),
+  );
+  ok(
+    JSON.stringify(post.ranges) === JSON.stringify(post.engineRanges),
+    "every slider range is the engine's GRADE_RANGES",
+    JSON.stringify(post.ranges),
+  );
+  ok(/true/.test(post.neutral), 'a fresh grade is neutral', post.neutral);
+  ok(post.summary === 'grade: neutral (no deltas)', "the neutral summary is the engine's string", post.summary);
+  ok(post.json.count === 0 && post.json.is_noop === true, 'the neutral grade_json has no deltas', JSON.stringify(post.json));
+  ok(
+    post.checks.join('|') === post.engineRules.join('|'),
+    'the four POST rules render in engine order',
+    post.checks.join(','),
+  );
+  ok(post.weights.join('|') === 'w 1.0|w 1.0|w 1.0|w 0.5', "the audit weights are the engine's", post.weights.join('|'));
+  ok(/PASS/.test(post.overall), 'a neutral plan passes the POST audit', post.overall);
+
+  console.log('\n[P2] Post tab — a moved control becomes a delta, computed by the engine');
+  const graded = await evaluate(`(() => {
+    const S = window.__cinematographer.studio;
+    const el = document.getElementById('p-grade-temperature');
+    el.value = '0.5';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      json: JSON.parse(document.getElementById('p-grade-json').textContent),
+      summary: document.getElementById('p-summary').textContent.trim(),
+      engineSummary: S.gradeSummary(S.applyGrade({ temperature: 0.5 })),
+      neutral: document.getElementById('p-neutral').textContent.trim(),
+      out: document.getElementById('p-grade-temperature-out').textContent.trim(),
+    };
+  })()`);
+  ok(graded.json.count === 1, 'one delta is reported', String(graded.json.count));
+  ok(
+    graded.json.deltas[0].param === 'temperature' && graded.json.deltas[0].direction === 'up',
+    'the delta names the control and its direction',
+    JSON.stringify(graded.json.deltas[0]),
+  );
+  ok(graded.summary === graded.engineSummary, "the summary matches the engine's own string", graded.summary);
+  ok(/false/.test(graded.neutral), 'is_neutral flips to false', graded.neutral);
+  ok(graded.out === '+0.50', 'the control readout follows the slider', graded.out);
+
+  console.log('\n[P3] Post tab — the JUDGE -> POST gate carries the live judge verdict');
+  const gate = await evaluate(`(() => {
+    const S = window.__cinematographer.studio;
+    // Put the Judge back on its defaults, which FAIL, so there IS a verdict to carry.
+    document.querySelector('#tabnav [data-tab="judge"]').click();
+    document.getElementById('reset').click();
+    const report = window.__cinematographer.compute().report;
+    document.querySelector('#tabnav [data-tab="post"]').click();
+    return {
+      shown: document.getElementById('p-corrections').textContent.trim(),
+      engine: S.correctionsText(report),
+      engineLines: S.correctionsFromReport(report).length,
+      badge: document.getElementById('p-gate').textContent.trim(),
+      badgeClass: document.getElementById('p-gate').className,
+      failing: report.scores.filter(s => !s.pass).map(s => s.rule),
+      failingWithLever: report.scores.filter(s => !s.pass && s.correction).length,
+      overall: document.getElementById('overall-value').textContent,
+    };
+  })()`);
+  ok(gate.overall === 'FAIL', 'the Judge is back on its failing default frame', gate.overall);
+  ok(gate.failing.length > 0, 'the default frame has failing rules to carry', gate.failing.join(','));
+  ok(
+    gate.shown === gate.engine,
+    'the gate text is exactly what CinematographerCorrection would produce',
+    gate.shown.split('\n')[0] ?? '(empty)',
+  );
+  ok(
+    gate.engineLines === gate.failingWithLever,
+    'one correction line per failing rule that has a lever',
+    `${gate.engineLines} lines / ${gate.failingWithLever} levers`,
+  );
+  ok(/carrying \d+ correction/.test(gate.badge), 'the gate badge reports the carry count', gate.badge);
+  ok(/open/.test(gate.badgeClass), 'the gate badge is in the open state', gate.badgeClass);
+
+  console.log('\n[P4] Post tab — the gate follows the Judge tab live');
+  const gateLive = await evaluate(`(() => {
+    const S = window.__cinematographer.studio;
+    document.querySelector('#tabnav [data-tab="judge"]').click();
+    const before = S.correctionsFromReport(window.__cinematographer.compute().report).length;
+    document.getElementById('autoframe').click();
+    const report = window.__cinematographer.compute().report;
+    const after = S.correctionsFromReport(report).length;
+    const overall = document.getElementById('overall-value').textContent;
+    document.querySelector('#tabnav [data-tab="post"]').click();
+    return {
+      before, after, overall,
+      engine: S.correctionsText(report),
+      shown: document.getElementById('p-corrections').textContent.trim(),
+      badge: document.getElementById('p-gate').textContent.trim(),
+    };
+  })()`);
+  ok(gateLive.overall === 'PASS', 'Auto-Frame flips the judge to overall PASS', gateLive.overall);
+  ok(
+    gateLive.after < gateLive.before,
+    'Auto-Frame reduces the corrections the gate carries',
+    `${gateLive.before} -> ${gateLive.after}`,
+  );
+  ok(
+    gateLive.shown ===
+      (gateLive.engine || '(empty — the judge found no failing rule, so there is nothing to correct)'),
+    'the Post tab re-reads the gate on show',
+    gateLive.shown.slice(0, 56),
+  );
+  ok(
+    gateLive.after > 0 ? /carrying/.test(gateLive.badge) : /no corrections/.test(gateLive.badge),
+    'the gate badge matches the carried count',
+    gateLive.badge,
+  );
+
+  console.log('\n[E4] the three new tabs screenshot');
+  for (const [tab, suffix] of [['elements', 'elements'], ['shoot', 'shoot'], ['post', 'post']]) {
+    await evaluate(`document.querySelector('#tabnav [data-tab="${tab}"]').click(), true`);
+    await sleep(250);
+    const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+    const file = SHOT.replace(/\.png$/, `-${suffix}.png`);
+    writeFileSync(file, Buffer.from(shot.data, 'base64'));
+    ok(existsSync(file), `${tab} tab screenshot written`, file);
+  }
+
+  const lateErrors = await evaluate('JSON.stringify(window.__panelErrors || [])');
+  ok(lateErrors === '[]', 'no JS errors after exercising all five tabs', lateErrors);
+
+  // Leave the panel where the rest of this check expects it.
+  await evaluate(`document.querySelector('#tabnav [data-tab="judge"]').click(), true`);
+  await sleep(200);
+
   console.log('\n[6] screenshot');
   const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   writeFileSync(SHOT, Buffer.from(shot.data, 'base64'));

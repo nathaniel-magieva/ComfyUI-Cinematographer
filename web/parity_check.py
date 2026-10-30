@@ -311,7 +311,14 @@ def main() -> int:
     d_checked, d_ok, d_engine = compare_director(fixtures, js, None, failures, findings)
     total += d_checked
     print(f"  {'director':<12} {d_ok}/{d_checked} OK")
+    studio_fx = fixtures.get("studio") or {}
+    s_checked, s_ok = compare_studio(studio_fx, js.get("studio") or {}, failures, "studio")
+    total += s_checked
+    print(f"  {'studio':<12} {s_ok}/{s_checked} OK")
     print()
+
+    studio_mods, studio_error = load_studio_engine()
+    engine_studio = None
 
     if engine:
         print("[2/3] Python engine vs frozen fixtures")
@@ -320,6 +327,12 @@ def main() -> int:
             ms = compare_section(section, fixtures, "expected", engine_out)
             print(f"  {section:<12} {len(fixtures[section]) - len(ms)}/{len(fixtures[section])} OK")
             failures.extend(ms)
+        if studio_mods:
+            engine_studio = run_studio_engine(studio_mods, studio_fx)
+            e_checked, e_ok = compare_studio(studio_fx, engine_studio, failures, "studio")
+            print(f"  {'studio':<12} {e_ok}/{e_checked} OK")
+        else:
+            print(f"  {'studio':<12} SKIPPED — {studio_error}")
         print()
 
         print("[3/3] Python engine vs JS (live)")
@@ -331,6 +344,13 @@ def main() -> int:
                 compare(fx["id"], eng_by_id[fx["id"]], js_by_id[fx["id"]], section, TOL, ms)
             print(f"  {section:<12} {len(fixtures[section]) - len(ms)}/{len(fixtures[section])} OK")
             failures.extend(ms)
+        if engine_studio is not None:
+            l_checked, l_ok = compare_studio_live(
+                studio_fx, engine_studio, js.get("studio") or {}, failures
+            )
+            print(f"  {'studio':<12} {l_ok}/{l_checked} OK")
+        else:
+            print(f"  {'studio':<12} SKIPPED — engine modules not importable")
         print()
 
         # The Director's Panel engine modules are a separate import: they are not
@@ -360,6 +380,7 @@ def main() -> int:
         print("[2/3] Python engine vs frozen fixtures — SKIPPED (engine not importable)")
         print("[3/3] Python engine vs JS (live)         — SKIPPED (engine not importable)")
         print("[4/4] Director's Panel                   — SKIPPED (engine not importable)")
+        print(f"      Stages 1/2/4/5 (studio)            — SKIPPED ({studio_error})")
         print()
 
     if structural:
@@ -551,6 +572,217 @@ def compare_director(
             )
 
     return checked, ok, True
+
+
+# ---------------------------------------------------------------------------
+# Stages 1 / 2 / 4 / 5 — the Elements, Shoot and Post tabs
+# ---------------------------------------------------------------------------
+#
+# `web/studio.js` mirrors `elements.py`, `post.py` and `nodes.py` for the four
+# stages the Director and Judge tabs do not cover. Same contract as the rest of
+# this file: the panel's numbers must be the engine's numbers.
+#
+# One deliberate asymmetry. For the cases the engine REJECTS, only the decision
+# is compared, never the message. The engine raises on the first problem and
+# names it in a sentence; the panel collects every problem so a form can show
+# them all at once. Freezing that prose would freeze the panel's voice and would
+# push the next person to make the panel lie to match a string.
+
+STUDIO_SECTIONS = (
+    "constants",
+    "sidecar",
+    "palette",
+    "grade",
+    "grade_summary",
+    "extend",
+    "edit",
+    "post_checks",
+    "corrections",
+    "registry",
+)
+
+#: Sections where a rejected case freezes only `ok`, not a value.
+STUDIO_DECISION_ONLY = {"palette", "extend", "edit"}
+
+
+def load_studio_engine():
+    """Import the Elements/Post/Nodes modules, or return (None, reason)."""
+    if APP_DIR not in sys.path:
+        sys.path.insert(0, APP_DIR)
+    try:
+        from cinematographer import elements as elements_mod
+        from cinematographer import nodes as nodes_mod
+        from cinematographer import post as post_mod
+    except Exception as exc:  # noqa: BLE001 - report, do not crash
+        return None, f"{type(exc).__name__}: {exc}"
+    return {"elements": elements_mod, "nodes": nodes_mod, "post": post_mod}, None
+
+
+def run_studio_engine(mods: dict, section: dict) -> dict:
+    """Compute the studio fixtures with the Python engine."""
+    out: dict[str, list] = {name: [] for name in STUDIO_SECTIONS}
+    elements_mod = mods["elements"]
+    nodes_mod = mods["nodes"]
+    post_mod = mods["post"]
+
+    for fx in section.get("constants") or []:
+        mod_name = fx["module"].rsplit("/", 1)[-1].removesuffix(".py")
+        value = getattr(mods.get(mod_name), fx["name"], None)
+        if isinstance(value, dict):
+            value = {
+                k: (list(v) if isinstance(v, (list, tuple)) else v) for k, v in value.items()
+            }
+        elif isinstance(value, (list, tuple)):
+            value = list(value)
+        out["constants"].append({"id": fx["id"], "actual": value})
+
+    for fx in section.get("sidecar") or []:
+        out["sidecar"].append(
+            {"id": fx["id"], "actual": elements_mod.sidecar_path(fx["asset_path"])}
+        )
+
+    for fx in section.get("palette") or []:
+        try:
+            parsed = [list(c) for c in nodes_mod._parse_palette(fx["text"])]
+            out["palette"].append({"id": fx["id"], "ok": True, "actual": parsed})
+        except ValueError:
+            out["palette"].append({"id": fx["id"], "ok": False, "actual": None})
+
+    for fx in section.get("grade") or []:
+        plan = post_mod.apply_grade(post_mod.GradeSettings(**fx["settings"]))
+        out["grade"].append({"id": fx["id"], "actual": plan.to_dict()})
+
+    for fx in section.get("grade_summary") or []:
+        plan = post_mod.apply_grade(post_mod.GradeSettings(**fx["settings"]))
+        out["grade_summary"].append({"id": fx["id"], "actual": plan.summary()})
+
+    for fx in section.get("extend") or []:
+        try:
+            plan = post_mod.ExtendPlan(
+                mode=fx["mode"],
+                duration_s=fx["duration_s"],
+                overlap_frames=fx["overlap_frames"],
+            )
+            out["extend"].append({"id": fx["id"], "ok": True, "actual": plan.to_dict()})
+        except ValueError:
+            out["extend"].append({"id": fx["id"], "ok": False, "actual": None})
+
+    for fx in section.get("edit") or []:
+        try:
+            region = post_mod.EditRegion(
+                label=fx["label"], bbox=tuple(fx["bbox"]), prompt=fx["prompt"]
+            )
+            out["edit"].append({"id": fx["id"], "ok": True, "actual": region.to_dict()})
+        except ValueError:
+            out["edit"].append({"id": fx["id"], "ok": False, "actual": None})
+
+    for fx in section.get("post_checks") or []:
+        ext = fx.get("extend")
+        ed = fx.get("edit")
+        plan = post_mod.PostPlan(
+            grade=post_mod.apply_grade(post_mod.GradeSettings(**fx["grade"])),
+            extend=(
+                None
+                if ext is None
+                else post_mod.ExtendPlan(
+                    mode=ext[0], duration_s=ext[1], overlap_frames=ext[2]
+                )
+            ),
+            edit=(
+                None
+                if ed is None
+                else post_mod.EditPlan(
+                    regions=[post_mod.EditRegion(label=ed[0], bbox=tuple(ed[1]), prompt=ed[2])]
+                )
+            ),
+        )
+        out["post_checks"].append(
+            {"id": fx["id"], "actual": [c.to_dict() for c in plan.checks()]}
+        )
+
+    for fx in section.get("corrections") or []:
+        out["corrections"].append(
+            {"id": fx["id"], "actual": nodes_mod._corrections(fx["report"])}
+        )
+
+    for fx in section.get("registry") or []:
+        reg = elements_mod.ElementRegistry(
+            [
+                elements_mod.Element(
+                    name=e["name"], category=e["category"], asset_path=e["asset_path"]
+                )
+                for e in fx["elements"]
+            ]
+        )
+        out["registry"].append({"id": fx["id"], "actual": reg.to_dict()})
+
+    return out
+
+
+def _studio_row_ok(name: str, fx: dict, got: dict, failures: list, tag: str) -> bool:
+    """Compare one studio row. Returns True when it agreed."""
+    if name in STUDIO_DECISION_ONLY:
+        if bool(got.get("ok")) != bool(fx.get("ok")):
+            failures.append(
+                Mismatch(fx["id"], f"{tag}.{name}.ok", fx.get("ok"), got.get("ok"))
+            )
+            return False
+        if not fx.get("ok"):
+            return True
+    before = len(failures)
+    compare(fx["id"], fx["expected"], got.get("actual"), f"{tag}.{name}", TOL, failures)
+    return len(failures) == before
+
+
+def compare_studio(section: dict, actual: dict, failures: list, tag: str) -> tuple[int, int]:
+    """Compare a studio section against the frozen fixtures. Returns (checked, ok)."""
+    checked = ok = 0
+    for name in STUDIO_SECTIONS:
+        rows = {r["id"]: r for r in (actual.get(name) or [])}
+        for fx in section.get(name) or []:
+            checked += 1
+            got = rows.get(fx["id"])
+            if got is None:
+                failures.append(
+                    Mismatch(fx["id"], f"{tag}.{name}", "present", "<missing>")
+                )
+                continue
+            if _studio_row_ok(name, fx, got, failures, tag):
+                ok += 1
+    return checked, ok
+
+
+def compare_studio_live(
+    section: dict, engine_out: dict, js_out: dict, failures: list
+) -> tuple[int, int]:
+    """Compare the engine's studio answers against the JS ones, live."""
+    checked = ok = 0
+    for name in STUDIO_SECTIONS:
+        eng = {r["id"]: r for r in (engine_out.get(name) or [])}
+        js = {r["id"]: r for r in (js_out.get(name) or [])}
+        for fx in section.get(name) or []:
+            checked += 1
+            e = eng.get(fx["id"])
+            j = js.get(fx["id"])
+            if e is None or j is None:
+                failures.append(
+                    Mismatch(fx["id"], f"studio.{name}", "present", "<missing>")
+                )
+                continue
+            if name in STUDIO_DECISION_ONLY:
+                if bool(e.get("ok")) != bool(j.get("ok")):
+                    failures.append(
+                        Mismatch(fx["id"], f"studio.{name}.ok", e.get("ok"), j.get("ok"))
+                    )
+                    continue
+                if not e.get("ok"):
+                    ok += 1
+                    continue
+            before = len(failures)
+            compare(fx["id"], e.get("actual"), j.get("actual"), f"studio.{name}", TOL, failures)
+            if len(failures) == before:
+                ok += 1
+    return checked, ok
 
 
 def node_version() -> str:
