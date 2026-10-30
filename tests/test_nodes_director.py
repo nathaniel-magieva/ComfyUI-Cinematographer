@@ -357,7 +357,7 @@ def test_the_wheel_summary_says_the_scale_is_invented():
 
 
 def test_a_bare_action_composes_to_itself():
-    final, attachments, unresolved, ok = nodes.CinemaPromptCompose().compose(
+    final, attachments, unresolved, ok, _ = nodes.CinemaPromptCompose().compose(
         "a woman walks into the diner"
     )
     assert final == "a woman walks into the diner"
@@ -368,21 +368,21 @@ def test_a_bare_action_composes_to_itself():
 
 def test_the_panel_fragment_is_appended_to_the_action():
     panel_json, _, _ = _panel(genre="noir")
-    final, _, _, _ = nodes.CinemaPromptCompose().compose(
+    final, _, _, _, _ = nodes.CinemaPromptCompose().compose(
         "a woman walks in", panel_json=panel_json
     )
     assert final == "a woman walks in genre noir"
 
 
 def test_extra_moves_are_appended_as_tags():
-    final, _, _, _ = nodes.CinemaPromptCompose().compose(
+    final, _, _, _, _ = nodes.CinemaPromptCompose().compose(
         "a woman walks in", moves="dolly-in, tracking"
     )
     assert final.endswith("#dolly-in #tracking")
 
 
 def test_an_empty_panel_json_means_no_panel():
-    final, _, _, _ = nodes.CinemaPromptCompose().compose("a walk", panel_json="")
+    final, _, _, _, _ = nodes.CinemaPromptCompose().compose("a walk", panel_json="")
     assert final == "a walk"
 
 
@@ -399,7 +399,7 @@ def test_a_panel_json_that_is_not_an_object_raises():
 def test_a_custom_palette_panel_survives_the_compose_round_trip():
     """The panel node emits it, the compose node must be able to read it back."""
     panel_json, _, _ = _panel(custom_palette="Molten Dawn")
-    final, _, _, _ = nodes.CinemaPromptCompose().compose("a walk", panel_json=panel_json)
+    final, _, _, _, _ = nodes.CinemaPromptCompose().compose("a walk", panel_json=panel_json)
     assert final == "a walk palette Molten Dawn"
 
 
@@ -422,7 +422,7 @@ def test_an_element_tag_resolves_against_a_registry(tmp_path):
     )
     registry.save(registry_path)
 
-    final, attachments, unresolved, ok = nodes.CinemaPromptCompose().compose(
+    final, attachments, unresolved, ok, _ = nodes.CinemaPromptCompose().compose(
         "a walk with @tamsin", registry_path=registry_path
     )
     assert final == "a walk with @tamsin"
@@ -454,7 +454,7 @@ def test_a_resolved_tag_is_moved_to_its_canonical_position(tmp_path):
     registry.save(registry_path)
     panel_json, _, _ = _panel(genre="noir")
 
-    final, _, _, _ = nodes.CinemaPromptCompose().compose(
+    final, _, _, _, _ = nodes.CinemaPromptCompose().compose(
         "@tamsin, walks in #tracking",
         panel_json=panel_json,
         registry_path=registry_path,
@@ -466,7 +466,7 @@ def test_an_unknown_element_is_reported_not_raised(tmp_path):
     registry_path = str(tmp_path / "elements.json")
     elements.ElementRegistry().save(registry_path)
 
-    _, _, unresolved, ok = nodes.CinemaPromptCompose().compose(
+    _, _, unresolved, ok, _ = nodes.CinemaPromptCompose().compose(
         "a walk with @nobody", registry_path=registry_path
     )
     assert json.loads(unresolved) == ["nobody"]
@@ -475,11 +475,99 @@ def test_an_unknown_element_is_reported_not_raised(tmp_path):
 
 def test_a_missing_registry_file_starts_empty_rather_than_failing(tmp_path):
     """A first run has no registry yet; that is not an error."""
-    _, _, unresolved, ok = nodes.CinemaPromptCompose().compose(
+    _, _, unresolved, ok, _ = nodes.CinemaPromptCompose().compose(
         "a walk with @nobody", registry_path=str(tmp_path / "absent.json")
     )
     assert json.loads(unresolved) == ["nobody"]
     assert ok is False
+
+
+def test_the_summary_says_which_registry_failure_it_was(tmp_path):
+    """A missing registry and a misspelled tag are not the same problem.
+
+    Both come back as an unresolved tag, and on a fresh install the missing
+    file is the likelier cause: nothing has been saved yet, so *every* ``@tag``
+    fails. The engine cannot tell the two apart from the tag alone, so the
+    summary has to say which one it is -- otherwise the operator hunts a typo
+    that is not there.
+
+    Three cases, three different summaries. The unresolved *list* keeps the same
+    shape in all of them, because the panel parses it as JSON and compares its
+    length; only the summary carries the cause.
+    """
+    node = nodes.CinemaPromptCompose()
+    action = "@tamsin walks into the diner"
+
+    # 1. No path at all.
+    _, _, unresolved_blank, ok_blank, summary_blank = node.compose(
+        action, registry_path=""
+    )
+
+    # 2. A path that does not exist yet -- the fresh-install case.
+    absent = tmp_path / "cinematographer" / "elements.json"
+    _, _, unresolved_absent, ok_absent, summary_absent = node.compose(
+        action, registry_path=str(absent)
+    )
+
+    # 3. A registry that exists but has never heard of this tag.
+    registry = elements.ElementRegistry()
+    registry.add(
+        elements.Element(
+            name="someone-else",
+            category="character",
+            asset_path=str(tmp_path / "someone.png"),
+        )
+    )
+    present = tmp_path / "elements.json"
+    registry.save(str(present))
+    _, _, unresolved_present, ok_present, summary_present = node.compose(
+        action, registry_path=str(present)
+    )
+
+    # All three fail, and all three report the same tag -- that is the defect.
+    for unresolved, ok in (
+        (unresolved_blank, ok_blank),
+        (unresolved_absent, ok_absent),
+        (unresolved_present, ok_present),
+    ):
+        assert json.loads(unresolved) == ["tamsin walks into the diner"]
+        assert ok is False
+
+    # ...and the summaries are what tell them apart.
+    assert "no registry_path set" in summary_blank
+    assert "no registry file at" in summary_absent
+    assert str(absent) in summary_absent
+    assert "no registry file at" not in summary_present
+    assert "no registry_path set" not in summary_present
+
+    assert len({summary_blank, summary_absent, summary_present}) == 3
+
+
+def test_a_resolved_tag_adds_no_registry_noise(tmp_path):
+    """The common case stays quiet: a note on every success is not a note."""
+    registry = elements.ElementRegistry()
+    registry.add(
+        elements.Element(
+            name="tamsin",
+            category="character",
+            asset_path=str(tmp_path / "tamsin.png"),
+        )
+    )
+    path = tmp_path / "elements.json"
+    registry.save(str(path))
+
+    # The delimiter matters: `@` names are greedy to the next `@`, `#` or
+    # punctuation, so `@tamsin walks into the diner` reads the whole phrase as
+    # one name. That contract is documented in `prompt.py` and pinned by
+    # `test_the_panel_and_the_engine_disagree_about_greedy_tags`.
+    _, _, unresolved, ok, summary = nodes.CinemaPromptCompose().compose(
+        "@tamsin, walks into the diner", registry_path=str(path)
+    )
+
+    assert json.loads(unresolved) == []
+    assert ok is True
+    assert "no registry file at" not in summary
+    assert "no registry_path set" not in summary
 
 
 def test_the_compose_node_does_not_duplicate_the_element_parser():

@@ -1041,6 +1041,25 @@ def _registry(module: Any, path: str) -> Any:
     return registry_cls()
 
 
+def _registry_note(path: str) -> str:
+    """Say whether the registry file was actually there.
+
+    A missing registry and a misspelled tag both come back as "unresolved", and
+    on a fresh install the first is the likelier cause: nothing has been saved
+    yet, so *every* ``@tag`` is unresolved. Saying which one it is costs one
+    ``os.path.isfile`` and saves the operator from hunting a typo that is not
+    there. Returns "" when the file exists, so the common case adds no noise.
+    """
+    if not str(path or "").strip():
+        return "no registry_path set, so no @tag can resolve"
+    if not os.path.isfile(path):
+        return (
+            f"no registry file at {path!r} yet -- save an Element first "
+            "(CinemaElementSave), or point registry_path at an existing one"
+        )
+    return ""
+
+
 class CinemaElementSave:
     """Register an asset as a named, categorised, reusable Element.
 
@@ -1971,8 +1990,14 @@ class CinemaPromptCompose:
         "every tag it could not resolve. Returns the final prompt, the API "
         "reference attachments, and the unresolved tags."
     )
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN")
-    RETURN_NAMES = ("final_prompt", "attachments_json", "unresolved_json", "ok")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN", "STRING")
+    RETURN_NAMES = (
+        "final_prompt",
+        "attachments_json",
+        "unresolved_json",
+        "ok",
+        "summary",
+    )
     FUNCTION = "compose"
     OUTPUT_NODE = False
 
@@ -2064,11 +2089,15 @@ class CinemaPromptCompose:
         )
         if unresolved:
             summary += f" | UNRESOLVED: {', '.join(unresolved)}"
+            note = _registry_note(str(registry_path or ""))
+            if note:
+                summary += f" | {note}"
         return (
             str(composed.final_prompt),
             _dumps(data.get("attachments", [])),
             _dumps(unresolved),
             ok,
+            summary,
         )
 
 
