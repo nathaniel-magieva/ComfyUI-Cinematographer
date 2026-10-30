@@ -54,24 +54,24 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 912 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 836 tests, all hand-computed expected values
 ```
 
 One test module needs numpy, because one node does. It is imported lazily inside
 that node, so the pack still imports without numpy and only `CinemaGradeApply`
 fails at execution time. The test module matches that tolerance with
 `pytest.importorskip`, so on a stdlib-only interpreter you get
-**811 passed, 22 skipped** rather than a collection error that hides the other 800.
+**815 passed, 22 skipped** rather than a collection error that hides the other 800.
 
-**Name the interpreter when you quote a total.** 912, 891 and 811 are the same tree:
-the 80-test difference between 811 and 891 is exactly `tests/test_nodes_grade_apply.py`,
+**Name the interpreter when you quote a total.** 836, 895 and 815 are the same tree:
+the 80-test difference between 815 and 895 is exactly `tests/test_nodes_grade_apply.py`,
 which is numpy-gated, and the remaining 21 are the ComfyUI-, server- and proxy-gated
 modules. The skip is loud and carries its reason, not a silent zero.
 
 | Interpreter | Result | Why |
 |---|---|---|
-| stdlib only | **811 passed, 22 skipped** | no numpy, so the 80 grade-apply tests skip whole; plus the 21 gated below |
-| with numpy | **891 passed, 21 skipped** | the grade-apply tests run; the 21 gated ones still skip |
+| stdlib only | **815 passed, 22 skipped** | no numpy, so the 80 grade-apply tests skip whole; plus the 21 gated below |
+| with numpy | **895 passed, 21 skipped** | the grade-apply tests run; the 21 gated ones still skip |
 
 **Eight of those tests drive ComfyUI's real execution engine.** They are gated on
 `COMFYUI_PATH` and skip with a specific reason when it is unset, when the path is not a
