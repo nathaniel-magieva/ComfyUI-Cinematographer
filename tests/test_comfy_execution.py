@@ -250,10 +250,15 @@ def test_director_panel_and_prompt_compose_execute(comfy):
     )
 
     compose_out = _outputs(ex, prompt, _first_node_of(prompt, "CinemaPromptCompose"))
-    final_prompt, _attachments, unresolved, ok = compose_out
+    final_prompt, _attachments, unresolved, ok, summary = compose_out
     assert ok[0] is True
     assert "#dolly-in" in final_prompt[0], "the #move tag did not survive composition"
     assert json.loads(unresolved[0]) == [], "the move should have resolved"
+    # The 5th output is the human-readable summary. It is the only place a
+    # *cause* can live: ``unresolved_json`` has to stay a JSON array because
+    # ``web/studio_panel.js`` parses it and compares its length against the
+    # panel's own count. Assert it survives the engine, not just the direct call.
+    assert "composed prompt:" in summary[0], "the summary output did not survive the engine"
 
 
 def test_director_panel_concrete_choice_round_trips(comfy):
@@ -411,7 +416,7 @@ def test_camera_move_output_is_not_wireable_into_prompt_compose(comfy):
     # a move from the JSON punctuation.
     if ex.success:
         compose_out = _outputs(ex, prompt, _first_node_of(prompt, "CinemaPromptCompose"))
-        final_prompt, _a, unresolved, ok = compose_out
+        final_prompt, _a, unresolved, ok, _summary = compose_out
         assert ok[0] is False or json.loads(unresolved[0]) != [], (
             "the JSON form of moves must not resolve as if it were a move name"
         )

@@ -18,6 +18,7 @@ is tested in ``test_director.py`` and ``test_prompt.py``. This file tests the
 wiring.
 """
 
+import ast
 import json
 
 import pytest
@@ -606,6 +607,105 @@ def test_every_registered_node_declares_the_full_comfyui_interface():
         assert isinstance(node_cls.FUNCTION, str), class_name
         assert callable(getattr(node_cls, node_cls.FUNCTION)), class_name
         assert "required" in node_cls.INPUT_TYPES(), class_name
+
+
+def _own_returns(func: ast.FunctionDef) -> list[tuple[str, int | None]]:
+    """Every ``return`` in ``func``'s own body -- not in a nested function.
+
+    ``ast.walk`` descends into nested ``def``/``lambda`` bodies, so a helper
+    defined inside a node method contributes its returns to the method's list.
+    ``CinemaDirectorPanel.panel`` defines exactly such a helper (``pick``), and
+    counting its ``return`` as one of the node's outputs is a false positive.
+    """
+    found: list[tuple[str, int | None]] = []
+
+    def visit(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue  # a nested scope's returns are not this method's
+            if isinstance(child, ast.Return):
+                value = child.value
+                if value is None:
+                    found.append(("bare", 0))
+                elif isinstance(value, ast.Tuple):
+                    found.append(("tuple", len(value.elts)))
+                elif isinstance(value, ast.Call):
+                    found.append(("call", None))  # arity not statically known
+                else:
+                    found.append(("value", 1))
+            visit(child)
+
+    visit(func)
+    return found
+
+
+def _annotation_arity(func: ast.FunctionDef) -> int | None:
+    """``-> tuple[A, B]`` states an arity the body may not spell out.
+
+    ``CameraReliabilityZone.zone`` ends ``return _zone_reason(result)``, so the
+    tuple is built in a helper. The annotation is the declaration of record.
+    """
+    ann = func.returns
+    if (
+        isinstance(ann, ast.Subscript)
+        and isinstance(ann.value, ast.Name)
+        and ann.value.id == "tuple"
+        and isinstance(ann.slice, ast.Tuple)
+    ):
+        return len(ann.slice.elts)
+    return None
+
+
+def test_every_node_function_returns_as_many_values_as_it_declares():
+    """The half of the interface contract the guard above cannot see.
+
+    ``test_every_registered_node_declares_the_full_comfyui_interface`` checks
+    that ``RETURN_TYPES`` and ``RETURN_NAMES`` agree with *each other*. That
+    says nothing about what the function actually returns, and the gap is not
+    hypothetical: ``CinemaPromptCompose.compose`` built a ``summary`` string
+    that the 4-tuple dropped on the floor, so the value was dead code and the
+    declaration guard stayed green the whole time. ComfyUI reads the tuple, not
+    the declaration, so a mismatch is silent at runtime too.
+
+    Read statically from the source rather than by calling each node: calling
+    all 18 needs valid inputs for every one of them, and the defect is visible
+    in the shape of the ``return`` statements.
+    """
+    source = open(nodes.__file__, encoding="utf-8").read()
+    tree = ast.parse(source)
+
+    methods: dict[str, ast.FunctionDef] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    methods[f"{node.name}.{item.name}"] = item
+
+    checked = 0
+    for class_name, node_cls in sorted(nodes.NODE_CLASS_MAPPINGS.items()):
+        declared = len(node_cls.RETURN_TYPES)
+        key = f"{class_name}.{node_cls.FUNCTION}"
+        func = methods.get(key)
+        assert func is not None, f"{key} is declared as FUNCTION but not defined"
+
+        returns = _own_returns(func)
+        assert returns, f"{key} has no return statement at all"
+
+        for kind, arity in returns:
+            if kind == "call":
+                # The tuple is built elsewhere; fall back to the annotation.
+                arity = _annotation_arity(func)
+                assert arity is not None, (
+                    f"{key} returns a bare call and its annotation does not "
+                    f"state an arity, so RETURN_TYPES cannot be checked"
+                )
+            assert arity == declared, (
+                f"{key} declares {declared} outputs ({node_cls.RETURN_TYPES}) "
+                f"but returns {arity} value(s) at one of its return statements"
+            )
+        checked += 1
+
+    assert checked == len(nodes.NODE_CLASS_MAPPINGS) == 18
 
 
 def test_the_four_new_director_and_prompt_nodes_are_registered():
