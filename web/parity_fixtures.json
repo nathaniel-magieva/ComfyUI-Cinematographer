@@ -1,10 +1,10 @@
 {
   "meta": {
     "generated_by": "web/tools/gen_fixtures.py",
-    "generated_at": "2026-10-30T03:36:57+00:00",
+    "generated_at": "2026-10-30T14:57:07+00:00",
     "engine": "cinematographer/ (Python)",
     "engine_revision": "unknown",
-    "engine_hash_sha256": "d93581b30ce0a7c1e4ce499d18937d1d74e58717afcc28a6cddea5ce66add532",
+    "engine_hash_sha256": "fc3204378a5134be8e04e3495c97730f47ced178a3c1ab4c2b49e31fbcad39e3",
     "engine_hash_modules": [
       "geometry.py",
       "framing.py",
@@ -87,7 +87,7 @@
             "value": -0.307,
             "target": "top gap in [0.05, 0.30]",
             "weight": 1.0,
-            "correction": "too tight / clipped top: lower the camera target or pull back"
+            "correction": "too tight / clipped top: raise the camera target or pull back"
           },
           {
             "rule": "shot_size",
@@ -197,7 +197,7 @@
             "value": 0.439,
             "target": "top gap in [0.05, 0.30]",
             "weight": 1.0,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -308,7 +308,7 @@
             "value": 0.851,
             "target": "top gap in [0.10, 0.45]",
             "weight": 0.7,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -420,7 +420,7 @@
             "value": 0.947,
             "target": "top gap in [0.20, 0.70]",
             "weight": 0.4,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -531,7 +531,7 @@
             "value": 0.584,
             "target": "top gap in [0.05, 0.30]",
             "weight": 1.0,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -642,7 +642,7 @@
             "value": 0.582,
             "target": "top gap in [0.05, 0.30]",
             "weight": 1.0,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -753,7 +753,7 @@
             "value": 0.814,
             "target": "top gap in [0.10, 0.45]",
             "weight": 0.7,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -865,7 +865,7 @@
             "value": 0.919,
             "target": "top gap in [0.20, 0.70]",
             "weight": 0.4,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -978,7 +978,7 @@
             "value": 1.0,
             "target": "top gap in [0.10, 0.45]",
             "weight": 0.7,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -1090,7 +1090,7 @@
             "value": 0.84,
             "target": "top gap in [0.10, 0.45]",
             "weight": 0.7,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -1202,7 +1202,7 @@
             "value": 0.706,
             "target": "top gap in [0.05, 0.30]",
             "weight": 1.0,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -1313,7 +1313,7 @@
             "value": 0.965,
             "target": "top gap in [0.20, 0.70]",
             "weight": 0.4,
-            "correction": "too much headroom: raise the camera target or push in"
+            "correction": "too much headroom: lower the camera target or push in"
           },
           {
             "rule": "shot_size",
@@ -2268,7 +2268,7 @@
               "value": 0.953,
               "target": "top gap in [0.20, 0.70]",
               "weight": 0.4,
-              "correction": "too much headroom: raise the camera target or push in"
+              "correction": "too much headroom: lower the camera target or push in"
             },
             {
               "rule": "shot_size",

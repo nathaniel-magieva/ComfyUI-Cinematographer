@@ -55,9 +55,18 @@ INFORMATIONAL_RULES = ("negative_space", "camera_angle", "direct_address")
 
 
 def _headroom_correction(head: float, lo: float, hi: float) -> str:
+    """``head`` is the space above the subject, so it grows as the aim rises.
+
+    Both halves of each string must move ``head`` toward the band: the target
+    half changes the aim, the distance half changes how much of the subject the
+    frame holds. Getting the target direction backwards sends the operator
+    further from a pass, which is worse than saying nothing.
+    """
     if head < lo:
-        return "too tight / clipped top: lower the camera target or pull back"
-    return "too much headroom: raise the camera target or push in"
+        # Too little space above the head: aim higher, or pull back to fit more in.
+        return "too tight / clipped top: raise the camera target or pull back"
+    # Too much space above the head: aim lower, or push in to fill the frame.
+    return "too much headroom: lower the camera target or push in"
 
 
 def _lead_room(s: Subject, ndc_x: float) -> float:

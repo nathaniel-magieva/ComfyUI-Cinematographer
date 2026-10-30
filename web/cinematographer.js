@@ -331,9 +331,12 @@ export function sizeTargetMid(shotType) {
 // EvaluateFraming — mirror framing.py:73-228
 // ---------------------------------------------------------------------------
 
+// `head` is the space above the subject, so it grows as the aim rises. Both
+// halves of each string must move `head` toward the band; the target half
+// changes the aim, the distance half changes how much of the subject fits.
 function headroomCorrection(head, lo, hi) {
-  if (head < lo) return 'too tight / clipped top: lower the camera target or pull back';
-  return 'too much headroom: raise the camera target or push in';
+  if (head < lo) return 'too tight / clipped top: raise the camera target or pull back';
+  return 'too much headroom: lower the camera target or push in';
 }
 
 /** Positive when the subject looks into the frame's negative space. */

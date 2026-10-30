@@ -5,10 +5,16 @@ import pytest
 from cinematographer.framing import (
     FRAMING_RULES,
     INFORMATIONAL_RULES,
+    _headroom_correction,
     evaluate_framing,
     summary,
 )
-from cinematographer.geometry import CamPose, ShotIntent, Subject
+from cinematographer.geometry import (
+    CamPose,
+    ShotIntent,
+    Subject,
+    headroom_band,
+)
 
 F = 3.45679012345679  # 1/tan(vfov/2) for the reference camera (35 mm / 36 mm / 16:9)
 
@@ -151,3 +157,61 @@ def test_report_serialises_to_json_safe_dict():
     rep = evaluate_framing(ref_subject(), ref_camera(), "medium", ShotIntent())
     json.dumps(rep.to_dict())  # must not raise
     assert rep.to_dict()["overall_pass"] is False
+
+
+# ---------------------------------------------------------------------------
+# The correction string must move the frame TOWARD the band, not away from it.
+#
+# This is a regression test for a real bug: both target directions in
+# `_headroom_correction` were inverted, so an operator who followed the advice
+# moved further from a pass. The bug survived because the string was only ever
+# asserted for its *presence*, never for its *direction*.
+#
+# Sign convention, from framing.py:146 -- `head = 1 - ty`, where `ty` is the
+# subject's top in NDC. Aiming the camera HIGHER points it up, so the subject
+# sits LOWER in frame, so `ty` falls and `head` RISES. Therefore:
+#     "raise the camera target" -> head increases
+#     "lower the camera target" -> head decreases
+# ---------------------------------------------------------------------------
+
+def _head_after_following(advice: str, head: float, step: float = 0.05) -> float:
+    """Apply the target half of the advice, using the convention above."""
+    if "raise the camera target" in advice:
+        return head + step
+    if "lower the camera target" in advice:
+        return head - step
+    raise AssertionError(f"advice names no target direction: {advice!r}")
+
+
+@pytest.mark.parametrize("shot_type", ["closeup", "medium", "wide"])
+@pytest.mark.parametrize("side", ["below", "above"])
+def test_headroom_correction_moves_toward_the_band(shot_type, side):
+    """Following the advice must turn a failing frame into a passing one."""
+    lo, hi = headroom_band(shot_type)
+    head = lo - 0.05 if side == "below" else hi + 0.05
+
+    assert not (lo <= head <= hi), "the fixture must start outside the band"
+
+    advice = _headroom_correction(head, lo, hi)
+    after = _head_after_following(advice, head)
+
+    assert lo <= after <= hi, (
+        f"{shot_type}/{side}: head {head:+.2f} is outside [{lo}, {hi}], the advice "
+        f"{advice!r} moved it to {after:+.2f}, which is still outside. "
+        f"The target direction is inverted."
+    )
+
+
+def test_headroom_correction_direction_is_not_symmetric():
+    """Guard against a 'fix' that swaps both branches and stays self-consistent.
+
+    If both directions were flipped together, the parametrised test above would
+    still pass for a symmetric band. Asserting the two branches disagree pins
+    the absolute sign, not just the relative one.
+    """
+    lo, hi = headroom_band("medium")
+    tight = _headroom_correction(lo - 0.05, lo, hi)
+    loose = _headroom_correction(hi + 0.05, lo, hi)
+
+    assert "raise the camera target" in tight, tight
+    assert "lower the camera target" in loose, loose
