@@ -189,7 +189,12 @@ class Element:
         self.asset_path = str(self.asset_path)
         self.description = str(self.description)
         self.created_utc = str(self.created_utc)
-        self.seed = int(self.seed)
+        # ``or 0`` rather than a bare ``int()``: a registry written by hand or by
+        # another tool may carry an explicit ``"seed": null``, and ``int(None)``
+        # raises. An absent seed and a null seed both mean "no seed", so they
+        # resolve the same way. ``nodes.CinemaElementSave`` already guards its
+        # own widget this way; this is the loader catching up with it.
+        self.seed = int(self.seed or 0)
 
         colours: list[tuple[float, float, float]] = []
         for colour in self.palette or ():
@@ -242,7 +247,7 @@ class Element:
             category=str(d.get("category", "")),
             asset_path=str(d.get("asset_path", "")),
             description=str(d.get("description", "")),
-            seed=int(d.get("seed", 0)),
+            seed=int(d.get("seed") or 0),
             palette=tuple(
                 tuple(float(c) for c in colour) for colour in d.get("palette") or ()
             ),

@@ -322,6 +322,34 @@ def test_element_from_dict_with_nothing_is_an_error():
         Element.from_dict({})
 
 
+def test_a_null_seed_loads_like_an_absent_one():
+    """``"seed": null`` is not the same as a missing key to ``dict.get``.
+
+    ``d.get("seed", 0)`` returns ``None`` when the key is present and null, so a
+    bare ``int()`` raised ``TypeError`` on a registry written by hand or by
+    another tool. An absent seed and a null seed both mean "no seed", so the
+    loader must resolve them identically. ``nodes.CinemaElementSave`` already
+    guards its own widget with ``int(seed or 0)``; this pins the loader to it.
+    """
+    base = {"name": "Oscar", "category": "prop", "asset_path": "x.png"}
+
+    absent = Element.from_dict(base)
+    null = Element.from_dict({**base, "seed": None})
+    assert absent.seed == 0
+    assert null.seed == 0
+    assert null == absent
+
+    # A real seed still survives, and 0 is not mistaken for "unset".
+    assert Element.from_dict({**base, "seed": 7}).seed == 7
+    assert Element.from_dict({**base, "seed": 0}).seed == 0
+
+
+def test_the_element_constructor_accepts_a_null_seed_too():
+    """The dataclass is public API, so the same guard belongs on both paths."""
+    element = Element(name="Oscar", category="prop", asset_path="x.png", seed=None)
+    assert element.seed == 0
+
+
 # --------------------------------------------------------------------------
 # ElementRegistry — lookup rules
 # --------------------------------------------------------------------------
