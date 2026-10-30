@@ -54,18 +54,32 @@ Restart ComfyUI. The nodes appear under the **Cinematographer** category.
 **To run the tests (no ComfyUI required):**
 
 ```bash
-python -m pytest tests/ -q      # 884 tests, all hand-computed expected values
+python -m pytest tests/ -q      # 898 tests, all hand-computed expected values
 ```
 
 One test module needs numpy, because one node does. It is imported lazily inside
 that node, so the pack still imports without numpy and only `CinemaGradeApply`
 fails at execution time. The test module matches that tolerance with
 `pytest.importorskip`, so on a stdlib-only interpreter you get
-**804 passed, 1 skipped** rather than a collection error that hides the other 800.
+**811 passed, 8 skipped** rather than a collection error that hides the other 800.
 
-**Name the interpreter when you quote a total.** 884 and 804 are the same tree: the
+**Name the interpreter when you quote a total.** 898 and 811 are the same tree: the
 80-test difference is exactly `tests/test_nodes_grade_apply.py`, which is numpy-gated.
 The skip is loud and carries its reason, not a silent zero.
+
+**Seven of those tests drive ComfyUI's real execution engine.** They are gated on
+`COMFYUI_PATH` and skip with a specific reason when it is unset, when the path is not a
+ComfyUI checkout, or when `torch` is missing — so a green run is never mistaken for
+"the pack was executed". To run them:
+
+```bash
+COMFYUI_PATH=/path/to/ComfyUI python -m pytest tests/test_comfy_execution.py -q
+```
+
+They boot ComfyUI's own loader, build a graph with `GraphBuilder`, run it through
+`execution.PromptExecutor`, and read the values back out of the executor cache. That is
+the only test here that would catch a node whose declared inputs and callable signature
+disagree, or a JUDGE→POST edge that is wired but carries nothing.
 
 The engine imports with **zero ComfyUI dependency** — that is a deliberate design constraint, so
 the geometry is testable and reusable outside ComfyUI.
