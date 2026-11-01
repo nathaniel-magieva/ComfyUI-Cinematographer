@@ -381,11 +381,18 @@ branch: our own nodes, tapped by `PreviewAny`. Their values came back over HTTP,
 > "0 of our 19 node instances ran", which is **false**. They ran; their results are visible only
 > through the `PreviewAny` taps. Count executions from the server log, not from `outputs`.
 
-Two of the rejections are worth calling out because they are *our* loose ends, not the user's:
-`reshoot_ltx25.json` carries a literal `PLACEHOLDER_SET_BY_THE_APP.png` in a `LoadImage`, and
+Three of the rejections are worth calling out because they are *our* loose ends, not the user's:
+`reshoot_ltx25.json` carries a literal `PLACEHOLDER_SET_BY_THE_APP.png` in a `LoadImage` **and** a
+literal `PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN` in a `CLIPTextEncode`, and
 `character_lora_train.json` expects an input folder named `character_refs` that nothing creates.
-Both are deliberate placeholders for an app to fill in, and both will stop a user who loads the
-graph by hand. They are listed here rather than hidden.
+All three are deliberate placeholders for an app to fill in, and all three will stop a user who
+loads the graph by hand. They are listed here rather than hidden.
+
+The first two were substituted by hand for the Cloud run described below, so the committed graph
+now carries a real image name and a real prompt. **That makes the file *less* safe to load by hand,
+not more**: it now names `tamsin.png`, which exists in `assets/`, and a prompt describing the
+synthetic scene in that image. A user who wants the placeholder behaviour back can restore both
+from `git show HEAD:workflows/reshoot_ltx25.json`.
 
 All six are **structurally validated**. What has actually been *executed* is narrower, and the
 difference is worth stating precisely:
@@ -393,7 +400,20 @@ difference is worth stating precisely:
 | Graph | Executed? | Where it stops |
 |---|---|---|
 | `cinema_studio_full.json` | **yes — two ways** | headless: 25 of 94, at `VAELoader` (no `vae/ae.safetensors`); live server: the weights branches are pruned, our nodes run |
-| the five `reshoot_*` / `character_lora_train.json` | **no** | never run |
+| `reshoot_ltx25.json` | **yes — end to end, on Comfy Cloud** | nowhere; it completed and wrote a 5.04 s 1920×1088 MP4 with native audio |
+| the other four `reshoot_*` / `character_lora_train.json` | **no** | never run |
+
+`reshoot_ltx25.json` is the first graph in this repository to run to completion against real
+weights. It was submitted to **Comfy Cloud** (`cloud.comfy.org`, ComfyUI v0.43.2) through the
+browser session, not through an API key, because no Comfy Cloud API key exists in this environment.
+The run: `prompt_id 07fca462-482e-401f-92b5-3a0109f606b0`, `status_str "success"`, `node_errors {}`,
+`execution_start 1793564356463` → `execution_success 1793564401280` = **44.8 s wall time**, with 11
+nodes served from cache. The output is
+`cinematographer/reshoot_ltx25_00001_.mp4`, **844,021 bytes**, h264 1920×1088, 121 frames at 24 fps,
+5.0417 s, **plus a native AAC audio track (236 frames) from the same pass**, sha256
+`bcdde13bb1650e06141269e41fe7523856ae8e0a25132573a949bc242dbf20fc`. All five LTX 2.5 model files it
+loads were confirmed present on Cloud before submission, and all 24 of its `class_type`s were
+confirmed present in Cloud's 3,858 node classes.
 
 `cinema_studio_full.json` was driven through ComfyUI 0.43.0's real execution engine. It runs 25 of
 its 94 nodes and halts at the first node that needs a checkpoint file. **10 of our 19 node instances
@@ -406,7 +426,7 @@ stating separately: it *prunes* rather than forcing execution, so the weights br
 and our nodes run on their own. Same graph, same machine, two different honest answers — see the
 live-server table above for the values it returned.
 
-The other five graphs have **never been executed** and no claim here should be read as one.
+The other four graphs have **never been executed** and no claim here should be read as one.
 
 Separately from the shipped graphs, the pack itself has been driven through a **live ComfyUI
 server** over HTTP — `POST /prompt`, `GET /history` — with a graph of our own nodes. That run

@@ -95,9 +95,14 @@ LTXVLatentUpsampler  ManualSigmas  CFGGuider  SamplerCustomAdvanced  KSamplerSel
 RandomNoise  CreateVideo  SaveVideo  VAEDecodeTiled  ImageScale  CLIPTextEncode
 ```
 
-That is the **native LTX 2.5 model path**, and it is precisely the surface that has never been
-exercised: **no frame of video has ever been rendered by this project.** Everything so far is
-structurally validated, never executed.
+That is the **native LTX 2.5 model path**, and as of **2026-11-01 it has been exercised**: the graph
+ran end to end on Comfy Cloud and produced a 5.04 s 1920×1088 h264 MP4 with a native AAC track
+(844,021 bytes, sha256 `bcdde13b…20fc`). Before that run, no frame of video had ever been rendered by
+this project — everything was structurally validated, never executed. See
+[`README.md` § The run that actually happened](README.md#the-run-that-actually-happened).
+
+What that run did **not** exercise is our own nodes: the director, the judge, the element registry
+and the grade are not on Cloud, so they remain structurally validated and locally unexecuted.
 
 `character_lora_train.json` is also submittable (9 core class_types) but is a LoRA-training
 graph; it is a different claim and a different cost profile.
@@ -107,7 +112,7 @@ graph; it is a different claim and a different cost profile.
 | Surface | On Cloud? | Why |
 |---|---|---|
 | `cinema_studio_full.json` (94 nodes) | **No** | 18 of 50 class_types are our pack |
-| `reshoot_ltx25.json` (34 nodes) | **Yes** | 24/24 core |
+| `reshoot_ltx25.json` (34 nodes) | **Yes — and it ran** | 24/24 core; executed 2026-11-01, 44.8 s, produced an MP4 |
 | `character_lora_train.json` (9 nodes) | **Yes** | 9/9 core |
 | The other three reshoot graphs | **No** | use LTXVideo nodes absent from Cloud's snapshot |
 | The judge / director / element engine | **No** | our pack; local ComfyUI only |
@@ -117,16 +122,23 @@ loader block, the two-stage sampler chain and the audio+video decode produce a r
 real GPU. It does **not** prove our graph works, because our graph is not what runs. Those are
 different claims and this document does not merge them.
 
-### Two things that could still block it, both checkable for free
+### Two things that could still block it, both checkable for free — and both were checked
 
 1. **Model availability.** Cloud exposes a fixed model set. `reshoot_ltx25.json` names
    `ltx-2.5-22b-distilled-transformer-bf16.safetensors`, `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors`,
    `ltx-2.5-video-vae-bf16.safetensors`, `ltx-2.5-audio-vae-bf16.safetensors` and
    `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`. Whether Cloud has them is answered
-   by `GET /api/object_info` — **no credits, no generation.**
+   by `GET /api/object_info` — **no credits, no generation.** **Result: all five present**, out of
+   513 model options across the four loader classes. Note that `--check-nodes` does *not* answer
+   this: it checks node classes only.
 2. **Core version drift.** Cloud's core is a snapshot. `StringContains`, `ComfySwitchNode` and
    `ComfyMathExpression` are core in local v0.43.0; whether Cloud has them is again answered by
-   `object_info`. `submit.py --check-nodes` asks exactly this question.
+   `object_info`. `submit.py --check-nodes` asks exactly this question. **Result: 24/24 present**
+   in Cloud's 3,858 node classes.
+
+A third blocker turned out to matter more than either: **there is no Comfy Cloud API key on this
+machine**, and API access needs a paid subscription. The run went through a logged-in browser
+session instead — see [`README.md`](README.md#two-ways-in).
 
 ---
 

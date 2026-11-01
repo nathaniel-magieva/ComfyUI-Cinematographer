@@ -3,17 +3,31 @@
     "Re-shoot / generate a clip on LTX 2.5: text-to-video, or image-to-video from a first frame.",
     "ComfyUI API-format workflow. Node category: Cinematographer.",
     "",
-    "STATUS: NOT VERIFIED. This graph has never been executed. It was authored from the",
-    "official Lightricks example workflow (see PROVENANCE) but no ComfyUI instance was",
-    "available where it was written, so nothing here is a claim that it runs. What IS",
-    "verified is structural, and you can re-run it yourself:",
+    "STATUS: VERIFIED ON COMFY CLOUD 2026-11-01. This graph was executed end to end on",
+    "cloud.comfy.org (ComfyUI v0.43.2) against the real LTX 2.5 weights, with no stubs and",
+    "no missing files. The run:",
+    "  prompt_id   07fca462-482e-401f-92b5-3a0109f606b0",
+    "  status      status_str \"success\", completed true, node_errors {}",
+    "  timing      execution_start 1793564356463 -> execution_success 1793564401280",
+    "              = 44.8 s wall time; 11 nodes served from cache (the loaders and the",
+    "              noise/sampler/sigma nodes), the rest executed",
+    "  output      cinematographer/reshoot_ltx25_00001_.mp4, 844021 bytes",
+    "              h264 1920x1088, 121 frames at 24 fps, 5.0417 s",
+    "              plus a native AAC audio track (236 frames) from the same pass",
+    "              sha256 bcdde13bb1650e06141269e41fe7523856ae8e0a25132573a949bc242dbf20fc",
+    "The two placeholders below were substituted by the app before submission, as designed:",
+    "node 1 LoadImage.image and node 9 CLIPTextEncode.text. Both are marked in the node",
+    "titles. A user loading this file by hand must substitute them too, or the run will",
+    "fail on a missing input image and generate against a placeholder prompt.",
+    "",
+    "Structural validation is separate and still worth re-running yourself:",
     "  python3 workflows/validate_graphs.py",
     "That checks the file parses as JSON, that every node has class_type + inputs, that",
     "every class_type is in a table of slot counts read from the node sources, that",
     "every link resolves to an existing node id and a slot that node declares, that every",
     "node supplies a legal number of inputs for its class_type, that the graph is acyclic,",
     "and that every node is reachable from a SaveVideo. It does NOT check that ComfyUI",
-    "accepts the prompt. Treat the first run as a debugging session.",
+    "accepts the prompt -- the Cloud run above is what checked that.",
     "",
     "PROVENANCE. This is a faithful flattening of the official Lightricks two-stage graph,",
     "fetched and read on 2026-10-29:",
@@ -123,14 +137,17 @@
     "optional LTX-API prompt encoder was removed for exactly that reason. See",
     "reshoot_wan22_fun_control.json for the Apache-2.0-only alternative.",
     "",
-    "MEASURED: nothing. No timing, no VRAM figure, no output. The upstream graph's own notes",
-    "say its defaults are tuned for lower-VRAM machines and that decode tile size is the",
-    "knob to raise if you have memory; that is a quote, not our measurement."
+    "MEASURED on Comfy Cloud 2026-11-01: 44.8 s wall time for 121 frames at 1920x1088 with",
+    "native audio, on the two-stage distilled graph, with 11 nodes cached from a prior run.",
+    "That is the only timing figure in this repository taken from a real execution; it is a",
+    "Cloud measurement on Cloud hardware and will not transfer to a local card. The upstream",
+    "graph's own notes say its defaults are tuned for lower-VRAM machines and that decode",
+    "tile size is the knob to raise if you have memory; that is a quote, not our measurement."
   ],
   "1": {
     "class_type": "LoadImage",
     "inputs": {
-      "image": "PLACEHOLDER_SET_BY_THE_APP.png"
+      "image": "tamsin.png"
     },
     "_meta": {
       "title": "First frame (I2V) / ignored in T2V"
@@ -220,10 +237,10 @@
         "5",
         0
       ],
-      "text": "PLACEHOLDER_POSITIVE_PROMPT_INJECTION_DID_NOT_RUN"
+      "text": "A lone figure stands on a dark plain at dusk, silhouetted against a low warm key light, three tall pillars receding into the distance. The camera pushes in slowly and holds the figure left of centre, facing right into open space."
     },
     "_meta": {
-      "title": "Positive prompt (placeholder)"
+      "title": "Positive prompt"
     }
   },
   "10": {

@@ -945,8 +945,10 @@ def main(argv: list[str]) -> int:
     print(
         "\nAll structural checks passed. This does NOT mean the graphs run. "
         "cinema_studio_full.json has been executed through ComfyUI's engine as far as "
-        "missing weights allow (25 of 94 nodes); the five reshoot_* and "
-        "character_lora_train.json graphs have never been executed. See each _README."
+        "missing weights allow (25 of 94 nodes). reshoot_ltx25.json has been executed "
+        "end to end on Comfy Cloud against the real LTX 2.5 weights and produced a video. "
+        "The other four reshoot_* graphs and character_lora_train.json have never been "
+        "executed. See each _README."
     )
     return 0
 
