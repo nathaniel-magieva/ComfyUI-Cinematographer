@@ -361,3 +361,81 @@ def test_the_entry_graph_needs_no_extra_packs():
         f"the entry graph now needs third-party packs: {external}. "
         "The README claims it needs none."
     )
+
+
+def test_the_autoframe_loop_closes_through_a_live_server():
+    """Judge fails -> AutoFrame solves -> the solver's own pose passes the Judge.
+
+    This is the load-bearing claim of the entry: the camera move is *verifiable*,
+    not merely asserted. The previous test proves the Judge's text survives the
+    trip to the next node; this one proves the loop actually closes -- that the
+    pose AutoFrame hands back is scored by the same Judge, in the same server,
+    and comes out passing.
+
+    The pose below is deliberately the one the Judge fails (see the headroom
+    assertion in the previous test). AutoFrame must move it to a pose that
+    passes, and it must say how many iterations that took.
+    """
+    subject = json.dumps(
+        {"name": "subject", "base": [0.0, 0.0, 0.0], "height": 1.8,
+         "facing_yaw_deg": 0.0}
+    )
+    failing_camera = json.dumps(
+        {"eye": [0.0, 1.66, 3.0], "target": [0.0, 1.66, 0.0], "focal_mm": 35.0}
+    )
+
+    prompt = {
+        # 1: the Judge scores the authored pose. It must fail.
+        "1": {
+            "class_type": "CinematographerEvaluate",
+            "inputs": {
+                "subject_json": subject,
+                "camera_json": failing_camera,
+                "shot_type": "medium",
+            },
+        },
+        # 2: the solver proposes a pose from the subject alone.
+        "2": {
+            "class_type": "CinematographerAutoFrame",
+            "inputs": {"subject_json": subject, "shot_type": "medium"},
+        },
+        # 3: the Judge scores the solver's pose. It must pass.
+        "3": {
+            "class_type": "CinematographerEvaluate",
+            "inputs": {
+                "subject_json": subject,
+                "camera_json": ["2", 0],
+                "shot_type": "medium",
+            },
+        },
+        # A live server needs a terminal output node; see the module docstring.
+        "4": {"class_type": "PreviewAny", "inputs": {"source": ["1", 1]}},
+        "5": {"class_type": "PreviewAny", "inputs": {"source": ["2", 2]}},
+        "6": {"class_type": "PreviewAny", "inputs": {"source": ["2", 3]}},
+        "7": {"class_type": "PreviewAny", "inputs": {"source": ["3", 1]}},
+        "8": {"class_type": "PreviewAny", "inputs": {"source": ["3", 2]}},
+    }
+    entry = _submit(prompt)
+    assert entry["status"]["status_str"] == "success", _errors(entry)
+    assert not _errors(entry)
+
+    # The authored pose fails, so the loop has something to close.
+    assert _text_of(entry, "4") == "False", (
+        "the authored pose was expected to fail the Judge; if it now passes, "
+        "this test no longer exercises the solver"
+    )
+
+    # The solver reports that it converged, and in how many iterations.
+    assert _text_of(entry, "5") == "True", (
+        "AutoFrame did not converge on a pose that satisfies the Judge"
+    )
+    iterations = int(_text_of(entry, "6"))
+    assert 1 <= iterations <= 24, (
+        f"AutoFrame reported {iterations} iterations; the reference budget is 24"
+    )
+
+    # And the solver's pose is scored by the same Judge, in the same server.
+    assert _text_of(entry, "7") == "True", (
+        "the pose AutoFrame returned does not pass the Judge that rejected the "
+        f"authored pose -- the loop does not close. Judge said: {_text_of(entry, '8')}"
+    )
