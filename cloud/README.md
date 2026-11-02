@@ -19,8 +19,9 @@ Comfy Cloud runs a **fixed catalogue of packs Comfy Org maintains**; you cannot 
 the element registry, the grade — **cannot be validated on Cloud at all**. They are local-only.
 
 What *can* be validated there is the **native LTX 2.5 model path**, and it now has been: on
-2026-11-01 `reshoot_ltx25.json` ran end to end on Comfy Cloud and produced a 5.04 s 1920×1088 MP4
-with native audio. See [§ The run that actually happened](#the-run-that-actually-happened).
+2026-11-01 `reshoot_ltx25.json` ran end to end on Comfy Cloud and produced a 5.04 s 1920×1088 MP4.
+Its audio track is present but **silent** — see [§ The run that actually
+happened](#the-run-that-actually-happened).
 
 ## Two ways in
 
@@ -188,7 +189,7 @@ browser session with the real LTX 2.5 weights and no stubs:
 | cache | 11 nodes served from cache (the loaders and the noise/sampler/sigma nodes) |
 | output | `cinematographer/reshoot_ltx25_00001_.mp4`, **844,021 bytes** |
 | video | h264 **1920×1088**, 121 frames, 24 fps, 5.0417 s |
-| audio | **AAC, 236 frames — native, from the same pass** |
+| audio | AAC-LC 48 kHz stereo, 236 frames — **present but silent** (`max_volume -78.3 dB`) |
 | sha256 | `bcdde13bb1650e06141269e41fe7523856ae8e0a25132573a949bc242dbf20fc` |
 
 The output is 1920×1088, not the 960×544 the latent was built at: `LTXVLatentUpsampler` (node 22)
@@ -206,6 +207,17 @@ project has, and it retires the "no frame of video has ever been rendered" cavea
 It does **not** prove our graph works, because our graph is not what runs. The director, the judge,
 the element registry and the grade are our nodes and are not on Cloud. Those remain "structurally
 validated, not executed" until they run in local ComfyUI.
+
+It also does **not** prove the audio branch produces sound. The graph wires the full audio path —
+`LTXVEmptyLatentAudio` → `LTXVConcatAVLatent` → `SamplerCustomAdvanced` → `LTXVSeparateAVLatent` →
+`LTXVAudioVAEDecode` → `CreateVideo` — and that path **executed without error**, emitting a real
+AAC-LC stream (48 kHz stereo, 236 frames, 127 kb/s). But the samples are the noise floor:
+`ffmpeg -af volumedetect` reports **`mean_volume -90.3 dB`, `max_volume -78.3 dB`**. The stream is
+present; it is silent. **An earlier revision of this file called that "native audio" on the strength
+of the stream's presence — presence is not audibility, and the claim was wrong.** Why the audio
+latent denoises to silence is **not yet known**: the two-stage distilled graph uses `ManualSigmas`
+tuned for the video latent and `cfg: 1.0`, and whether the audio latent needs its own schedule or its
+own conditioning is an open question. It is recorded as open, not guessed at.
 
 ## The four traps, if you take the session route
 

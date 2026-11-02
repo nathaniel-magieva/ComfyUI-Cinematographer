@@ -28,8 +28,21 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB = resolve(HERE, '..');
-const REPO = resolve(WEB, '..', '..');
-const OUT = resolve(REPO, 'video');
+
+// The output directory is REQUIRED, not inferred.
+//
+// This file was written for an `app/web/tools/` layout, where `resolve(WEB,'..','..')`
+// landed on the repo root. In this repo the layout is `web/tools/`, so the same
+// expression resolves to `/tmp` and the capture would be written to `/tmp/video`
+// without a word. Rather than guess which layout we are in, take the directory
+// from argv[3] and refuse to run without it.
+const OUT = process.argv[3] ? resolve(process.argv[3]) : null;
+if (!OUT) {
+  console.log('FAIL — no output directory. Usage:');
+  console.log('  node web/tools/record_demo.mjs <panel-url> <output-dir>');
+  console.log('Refusing to guess: the old default resolved to /tmp/video in this layout.');
+  process.exit(2);
+}
 const RAW = join(OUT, 'raw');
 
 const URL_ = process.argv[2] ?? 'http://127.0.0.1:8765/';

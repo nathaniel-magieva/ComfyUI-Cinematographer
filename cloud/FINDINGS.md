@@ -96,10 +96,16 @@ RandomNoise  CreateVideo  SaveVideo  VAEDecodeTiled  ImageScale  CLIPTextEncode
 ```
 
 That is the **native LTX 2.5 model path**, and as of **2026-11-01 it has been exercised**: the graph
-ran end to end on Comfy Cloud and produced a 5.04 s 1920×1088 h264 MP4 with a native AAC track
-(844,021 bytes, sha256 `bcdde13b…20fc`). Before that run, no frame of video had ever been rendered by
-this project — everything was structurally validated, never executed. See
+ran end to end on Comfy Cloud and produced a 5.04 s 1920×1088 h264 MP4 (844,021 bytes, sha256
+`bcdde13b…20fc`). Before that run, no frame of video had ever been rendered by this project —
+everything was structurally validated, never executed. See
 [`README.md` § The run that actually happened](README.md#the-run-that-actually-happened).
+
+The MP4 carries an AAC-LC track that is **present but silent** (`max_volume -78.3 dB`, measured with
+`ffmpeg -af volumedetect`). The audio branch executed and emitted a stream; it did not emit sound.
+An earlier revision of this file called that "a native AAC track" — true of the container, misleading
+about the content, and corrected here. Why the audio latent denoises to silence is an **open
+question**, not a solved one.
 
 What that run did **not** exercise is our own nodes: the director, the judge, the element registry
 and the grade are not on Cloud, so they remain structurally validated and locally unexecuted.

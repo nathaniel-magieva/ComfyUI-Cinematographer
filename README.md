@@ -400,7 +400,7 @@ difference is worth stating precisely:
 | Graph | Executed? | Where it stops |
 |---|---|---|
 | `cinema_studio_full.json` | **yes — two ways** | headless: 25 of 94, at `VAELoader` (no `vae/ae.safetensors`); live server: the weights branches are pruned, our nodes run |
-| `reshoot_ltx25.json` | **yes — end to end, on Comfy Cloud** | nowhere; it completed and wrote a 5.04 s 1920×1088 MP4 with native audio |
+| `reshoot_ltx25.json` | **yes — end to end, on Comfy Cloud** | nowhere; it completed and wrote a 5.04 s 1920×1088 MP4 whose audio track is present but **silent** |
 | the other four `reshoot_*` / `character_lora_train.json` | **no** | never run |
 
 `reshoot_ltx25.json` is the first graph in this repository to run to completion against real
@@ -410,10 +410,21 @@ The run: `prompt_id 07fca462-482e-401f-92b5-3a0109f606b0`, `status_str "success"
 `execution_start 1793564356463` → `execution_success 1793564401280` = **44.8 s wall time**, with 11
 nodes served from cache. The output is
 `cinematographer/reshoot_ltx25_00001_.mp4`, **844,021 bytes**, h264 1920×1088, 121 frames at 24 fps,
-5.0417 s, **plus a native AAC audio track (236 frames) from the same pass**, sha256
-`bcdde13bb1650e06141269e41fe7523856ae8e0a25132573a949bc242dbf20fc`. All five LTX 2.5 model files it
-loads were confirmed present on Cloud before submission, and all 24 of its `class_type`s were
-confirmed present in Cloud's 3,858 node classes.
+5.0417 s, sha256 `bcdde13bb1650e06141269e41fe7523856ae8e0a25132573a949bc242dbf20fc`. All five LTX 2.5
+model files it loads were confirmed present on Cloud before submission, and all 24 of its
+`class_type`s were confirmed present in Cloud's 3,858 node classes.
+
+**The audio track is present and silent, and that is a finding, not a typo.** The graph wires the
+full audio branch — `LTXVEmptyLatentAudio` → `LTXVConcatAVLatent` → `SamplerCustomAdvanced` →
+`LTXVSeparateAVLatent` → `LTXVAudioVAEDecode` → `CreateVideo` — and that branch executed without
+error: the output carries a real AAC-LC stream, 48 kHz stereo, 236 frames, 127 kb/s. But the samples
+are the noise floor. Measured with `ffmpeg -af volumedetect`: **`mean_volume: -90.3 dB`,
+`max_volume: -78.3 dB`** — i.e. digital silence. An earlier revision of this file said "native audio"
+on the strength of the stream's *presence*; presence is not audibility, and the claim was wrong. It
+is corrected here. **Why the audio branch denoises to silence is not yet known** — the two-stage
+distilled graph uses `ManualSigmas` tuned for the video latent and `cfg: 1.0`, and whether the audio
+latent needs its own schedule or its own conditioning is an open question this repository has not
+answered. It is recorded as open rather than guessed at.
 
 `cinema_studio_full.json` was driven through ComfyUI 0.43.0's real execution engine. It runs 25 of
 its 94 nodes and halts at the first node that needs a checkpoint file. **10 of our 19 node instances
